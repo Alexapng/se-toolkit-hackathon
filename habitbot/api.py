@@ -4,12 +4,15 @@ import argparse
 import json
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from .service import HabitService
 
 
 def _build_handler(service: HabitService) -> type[BaseHTTPRequestHandler]:
+    web_root = Path(__file__).resolve().parent / "web"
+
     class HabitApiHandler(BaseHTTPRequestHandler):
         _service = service
         server_version = "HabitBot/0.1"
@@ -19,7 +22,16 @@ def _build_handler(service: HabitService) -> type[BaseHTTPRequestHandler]:
             query = parse_qs(parsed.query)
 
             try:
-                if parsed.path == "/health":
+                if parsed.path in {"/", "/index.html"}:
+                    self._send_static_file(web_root / "index.html", "text/html; charset=utf-8")
+                elif parsed.path == "/styles.css":
+                    self._send_static_file(web_root / "styles.css", "text/css; charset=utf-8")
+                elif parsed.path == "/app.js":
+                    self._send_static_file(
+                        web_root / "app.js",
+                        "application/javascript; charset=utf-8",
+                    )
+                elif parsed.path == "/health":
                     self._send_json(HTTPStatus.OK, {"status": "ok"})
                 elif parsed.path == "/users":
                     users = self._service.list_users()
@@ -79,6 +91,18 @@ def _build_handler(service: HabitService) -> type[BaseHTTPRequestHandler]:
                 return
 
             self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "internal server error"})
+
+        def _send_static_file(self, file_path: Path, content_type: str) -> None:
+            if not file_path.exists() or not file_path.is_file():
+                self._send_json(HTTPStatus.NOT_FOUND, {"error": "static file not found"})
+                return
+
+            body = file_path.read_bytes()
+            self.send_response(HTTPStatus.OK.value)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
 
         def _read_json_body(self) -> dict[str, object]:
             content_length = int(self.headers.get("Content-Length", "0"))
@@ -156,7 +180,7 @@ def run_server(host: str, port: int, db_path: str) -> None:
     handler_cls = _build_handler(service)
 
     with ThreadingHTTPServer((host, port), handler_cls) as server:
-        print(f"Habit API is running at http://{host}:{port} (db: {db_path})")
+        print(f"Habit web app + API is running at http://{host}:{port} (db: {db_path})")
         print("Press Ctrl+C to stop.")
         try:
             server.serve_forever()
@@ -165,7 +189,7 @@ def run_server(host: str, port: int, db_path: str) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run the minimal habit bot backend API server.")
+    parser = argparse.ArgumentParser(description="Run the minimal habit bot web app + backend API server.")
     parser.add_argument("--host", default="127.0.0.1", help="Host for API server (default: 127.0.0.1).")
     parser.add_argument("--port", type=int, default=8000, help="Port for API server (default: 8000).")
     parser.add_argument(
@@ -179,4 +203,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

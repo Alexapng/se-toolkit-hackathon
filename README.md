@@ -1,6 +1,6 @@
 # Minimal Habit Bot
 
-Track daily completion of small habits with a lightweight backend API, SQLite database, and terminal bot client.
+Track daily completion of small habits with a lightweight backend API, SQLite database, and web app client.
 
 ## Product Context
 
@@ -14,32 +14,19 @@ Track daily completion of small habits with a lightweight backend API, SQLite da
 - Components:
   - backend API: `habitbot/api.py`
   - database: SQLite (`habitbot.db`)
-  - client: terminal bot (`habitbot/client.py`)
+  - client: web app (`habitbot/web/index.html`, `habitbot/web/app.js`, `habitbot/web/styles.css`)
 
 ## Run Locally
 
-1. Start backend:
+1. Start backend + web app server:
 
 ```powershell
 $env:UV_CACHE_DIR='.uv-cache'; $env:UV_PYTHON_INSTALL_DIR='.uv-python'; uv run --python 3.12 python -m habitbot.api --host 127.0.0.1 --port 8000
 ```
 
-2. In a second terminal, start client:
+2. Open the web app in browser:
 
-```powershell
-$env:UV_CACHE_DIR='.uv-cache'; $env:UV_PYTHON_INSTALL_DIR='.uv-python'; uv run --python 3.12 python -m habitbot.client --base-url http://127.0.0.1:8000
-```
-
-3. Example commands in client:
-
-```text
-create-user Alex
-add-habit Drink water
-add-habit Read 10 pages
-habits
-check-in 1
-today
-```
+`http://127.0.0.1:8000/`
 
 ## Test
 
@@ -80,11 +67,15 @@ curl http://127.0.0.1:8000/health
 sudo systemctl status habitbot
 ```
 
-5. Optional: allow external access to the backend:
+5. Allow external access:
 
 ```bash
 sudo ufw allow 8000/tcp
 ```
+
+6. Open the web app from your laptop:
+
+`http://<YOUR_VM_PUBLIC_IP>:8000/`
 
 Useful service commands:
 

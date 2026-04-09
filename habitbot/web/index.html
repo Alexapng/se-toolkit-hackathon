@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Minimal Habit Bot</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="layout">
+    <header class="hero">
+      <p class="eyebrow">Daily Consistency</p>
+      <h1>Minimal Habit Bot</h1>
+      <p class="subtitle">Track small habits with one simple check-in per day.</p>
+    </header>
+
+    <section class="panel">
+      <h2>User</h2>
+      <div class="row">
+        <label for="userSelect">Active user</label>
+        <select id="userSelect"></select>
+        <button id="refreshUsersBtn" type="button" class="btn ghost">Refresh</button>
+      </div>
+      <div class="row">
+        <label for="newUserInput">Create user</label>
+        <input id="newUserInput" type="text" placeholder="Name">
+        <button id="createUserBtn" type="button" class="btn">Create</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Daily Check-In</h2>
+      <div class="row">
+        <label for="statusDateInput">Date</label>
+        <input id="statusDateInput" type="date">
+        <button id="refreshStatusBtn" type="button" class="btn ghost">Refresh</button>
+      </div>
+      <div class="stats" id="statsBox">
+        <div class="stat">
+          <span class="stat-label">Completed</span>
+          <span class="stat-value" id="completedCount">0</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Total habits</span>
+          <span class="stat-value" id="totalCount">0</span>
+        </div>
+      </div>
+      <div id="habitsList" class="habits"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Add Habit</h2>
+      <div class="row">
+        <label for="newHabitInput">Habit name</label>
+        <input id="newHabitInput" type="text" placeholder="Drink water">
+        <button id="addHabitBtn" type="button" class="btn">Add</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Activity</h2>
+      <p id="feedbackMessage" class="feedback">Ready.</p>
+    </section>
+  </main>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>
+
