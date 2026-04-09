@@ -1,0 +1,2 @@
+"""Minimal Habit Bot package."""
+
