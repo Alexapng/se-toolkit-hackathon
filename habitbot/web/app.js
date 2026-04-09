@@ -1,15 +1,16 @@
+const USER_NAME_KEY = "habitbot_user_name";
+
 const state = {
-  users: [],
   activeUserId: null,
+  activeUserName: "",
   habits: [],
   status: null,
 };
 
 const refs = {
-  userSelect: document.getElementById("userSelect"),
-  refreshUsersBtn: document.getElementById("refreshUsersBtn"),
-  newUserInput: document.getElementById("newUserInput"),
-  createUserBtn: document.getElementById("createUserBtn"),
+  userNameInput: document.getElementById("userNameInput"),
+  useNameBtn: document.getElementById("useNameBtn"),
+  currentUserText: document.getElementById("currentUserText"),
   statusDateInput: document.getElementById("statusDateInput"),
   refreshStatusBtn: document.getElementById("refreshStatusBtn"),
   completedCount: document.getElementById("completedCount"),
@@ -17,7 +18,6 @@ const refs = {
   habitsList: document.getElementById("habitsList"),
   newHabitInput: document.getElementById("newHabitInput"),
   addHabitBtn: document.getElementById("addHabitBtn"),
-  feedbackMessage: document.getElementById("feedbackMessage"),
 };
 
 function currentDateValue() {
@@ -43,34 +43,18 @@ async function request(path, options = {}) {
   return payload;
 }
 
-function setMessage(message, isError = false) {
-  refs.feedbackMessage.textContent = message;
-  refs.feedbackMessage.classList.toggle("error", isError);
-}
-
-function renderUsers() {
-  refs.userSelect.innerHTML = "";
-  if (state.users.length === 0) {
-    const option = document.createElement("option");
-    option.textContent = "No users yet";
-    option.value = "";
-    refs.userSelect.appendChild(option);
-    refs.userSelect.disabled = true;
+function updateCurrentUserText() {
+  if (!state.activeUserId) {
+    refs.currentUserText.textContent = "No user selected yet.";
     return;
   }
+  refs.currentUserText.textContent = `Using: ${state.activeUserName}`;
+}
 
-  refs.userSelect.disabled = false;
-  for (const user of state.users) {
-    const option = document.createElement("option");
-    option.value = String(user.id);
-    option.textContent = `#${user.id} ${user.name}`;
-    refs.userSelect.appendChild(option);
-  }
-
-  if (!state.activeUserId) {
-    state.activeUserId = state.users[0].id;
-  }
-  refs.userSelect.value = String(state.activeUserId);
+function setBusy(isBusy) {
+  refs.useNameBtn.disabled = isBusy;
+  refs.addHabitBtn.disabled = isBusy;
+  refs.refreshStatusBtn.disabled = isBusy;
 }
 
 function renderHabits() {
@@ -129,29 +113,48 @@ function renderHabits() {
   refs.totalCount.textContent = String(habits.length);
 }
 
-async function loadUsers() {
-  const data = await request("/users");
-  state.users = data.users || [];
-
-  if (
-    state.activeUserId &&
-    !state.users.find((user) => user.id === state.activeUserId)
-  ) {
-    state.activeUserId = null;
+async function resolveOrCreateUser(name) {
+  const encodedName = encodeURIComponent(name);
+  try {
+    return await request(`/users/lookup?name=${encodedName}`);
+  } catch (err) {
+    if (err.message !== "user not found") {
+      throw err;
+    }
   }
 
-  renderUsers();
-  if (state.activeUserId) {
+  return request("/users", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+}
+
+async function applyUserName() {
+  const name = refs.userNameInput.value.trim();
+  if (!name) {
+    alert("Enter your name first.");
+    return;
+  }
+
+  setBusy(true);
+  try {
+    const user = await resolveOrCreateUser(name);
+    state.activeUserId = user.id;
+    state.activeUserName = user.name;
+    localStorage.setItem(USER_NAME_KEY, user.name);
     await loadDashboard();
-  } else {
-    state.habits = [];
-    state.status = null;
-    renderHabits();
+    updateCurrentUserText();
+  } finally {
+    setBusy(false);
   }
 }
 
 async function loadDashboard() {
   if (!state.activeUserId) {
+    state.habits = [];
+    state.status = null;
+    renderHabits();
     return;
   }
 
@@ -165,71 +168,52 @@ async function loadDashboard() {
   renderHabits();
 }
 
-async function createUser() {
-  const name = refs.newUserInput.value.trim();
-  if (!name) {
-    setMessage("Enter a user name first.", true);
-    return;
-  }
-  const user = await request("/users", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name }),
-  });
-  refs.newUserInput.value = "";
-  state.activeUserId = user.id;
-  await loadUsers();
-  setMessage(`Created user "${user.name}".`);
-}
-
 async function addHabit() {
   if (!state.activeUserId) {
-    setMessage("Create or select a user first.", true);
+    alert("Set your name first.");
     return;
   }
   const name = refs.newHabitInput.value.trim();
   if (!name) {
-    setMessage("Enter a habit name first.", true);
+    alert("Enter a habit name first.");
     return;
   }
-  const habit = await request("/habits", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ user_id: state.activeUserId, name }),
-  });
-  refs.newHabitInput.value = "";
-  await loadDashboard();
-  setMessage(`Added habit "${habit.name}".`);
+
+  setBusy(true);
+  try {
+    await request("/habits", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: state.activeUserId, name }),
+    });
+    refs.newHabitInput.value = "";
+    await loadDashboard();
+  } finally {
+    setBusy(false);
+  }
 }
 
 async function checkInHabit(habitId) {
   const date = currentDateValue();
-  await request("/checkins", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ habit_id: habitId, date }),
-  });
-  await loadDashboard();
-  setMessage(`Check-in saved for ${date}.`);
+  setBusy(true);
+  try {
+    await request("/checkins", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ habit_id: habitId, date }),
+    });
+    await loadDashboard();
+  } finally {
+    setBusy(false);
+  }
 }
 
 function bindEvents() {
-  refs.userSelect.addEventListener("change", async () => {
-    state.activeUserId = Number(refs.userSelect.value) || null;
-    await loadDashboard();
-    setMessage("Active user updated.");
-  });
-
-  refs.refreshUsersBtn.addEventListener("click", async () => {
-    await loadUsers();
-    setMessage("Users reloaded.");
-  });
-
-  refs.createUserBtn.addEventListener("click", async () => {
+  refs.useNameBtn.addEventListener("click", async () => {
     try {
-      await createUser();
+      await applyUserName();
     } catch (err) {
-      setMessage(err.message, true);
+      alert(err.message);
     }
   });
 
@@ -237,16 +221,26 @@ function bindEvents() {
     try {
       await addHabit();
     } catch (err) {
-      setMessage(err.message, true);
+      alert(err.message);
     }
   });
 
   refs.refreshStatusBtn.addEventListener("click", async () => {
     try {
       await loadDashboard();
-      setMessage("Status reloaded.");
     } catch (err) {
-      setMessage(err.message, true);
+      alert(err.message);
+    }
+  });
+
+  refs.userNameInput.addEventListener("keydown", async (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      try {
+        await applyUserName();
+      } catch (err) {
+        alert(err.message);
+      }
     }
   });
 }
@@ -254,11 +248,18 @@ function bindEvents() {
 async function start() {
   currentDateValue();
   bindEvents();
-  try {
-    await loadUsers();
-    setMessage("Web app is ready.");
-  } catch (err) {
-    setMessage(err.message, true);
+  updateCurrentUserText();
+
+  const savedName = localStorage.getItem(USER_NAME_KEY);
+  if (savedName) {
+    refs.userNameInput.value = savedName;
+    try {
+      await applyUserName();
+    } catch (err) {
+      alert(err.message);
+    }
+  } else {
+    renderHabits();
   }
 }
 

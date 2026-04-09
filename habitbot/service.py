@@ -41,6 +41,20 @@ class HabitService:
             rows = conn.execute("SELECT id, name FROM users ORDER BY id").fetchall()
             return [dict(row) for row in rows]
 
+    def get_user_by_name(self, name: str) -> Record:
+        clean_name = name.strip()
+        if not clean_name:
+            raise ValueError("name cannot be empty")
+
+        with get_connection(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT id, name FROM users WHERE name = ?",
+                (clean_name,),
+            ).fetchone()
+            if row is None:
+                raise LookupError("user not found")
+            return dict(row)
+
     def add_habit(self, user_id: int, name: str) -> Record:
         clean_name = name.strip()
         if not clean_name:
@@ -128,4 +142,3 @@ class HabitService:
         row = conn.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
         if row is None:
             raise LookupError("user not found")
-

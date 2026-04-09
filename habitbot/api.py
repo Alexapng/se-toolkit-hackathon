@@ -33,6 +33,10 @@ def _build_handler(service: HabitService) -> type[BaseHTTPRequestHandler]:
                     )
                 elif parsed.path == "/health":
                     self._send_json(HTTPStatus.OK, {"status": "ok"})
+                elif parsed.path == "/users/lookup":
+                    name = self._required_str_param(query, "name")
+                    user = self._service.get_user_by_name(name)
+                    self._send_json(HTTPStatus.OK, user)
                 elif parsed.path == "/users":
                     users = self._service.list_users()
                     self._send_json(HTTPStatus.OK, {"users": users})
@@ -164,6 +168,16 @@ def _build_handler(service: HabitService) -> type[BaseHTTPRequestHandler]:
                 return int(values[0])
             except ValueError as exc:
                 raise ValueError(f"query parameter '{key}' must be an integer") from exc
+
+        @staticmethod
+        def _required_str_param(query: dict[str, list[str]], key: str) -> str:
+            values = query.get(key)
+            if not values:
+                raise ValueError(f"missing query parameter: {key}")
+            value = values[0].strip()
+            if not value:
+                raise ValueError(f"query parameter '{key}' cannot be empty")
+            return value
 
         @staticmethod
         def _optional_str_param(query: dict[str, list[str]], key: str) -> str | None:

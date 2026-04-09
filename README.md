@@ -1,6 +1,6 @@
 # Minimal Habit Bot
 
-Track daily completion of small habits with a lightweight backend API, SQLite database, and web app client.
+Track daily completion of small habits with a lightweight backend API, SQLite database, and personal web app client.
 
 ## Product Context
 
@@ -27,6 +27,11 @@ $env:UV_CACHE_DIR='.uv-cache'; $env:UV_PYTHON_INSTALL_DIR='.uv-python'; uv run -
 2. Open the web app in browser:
 
 `http://127.0.0.1:8000/`
+
+3. In the web app:
+
+- Enter your name and click `Use` (this creates your account if needed).
+- Add habits and check in for today.
 
 ## Test
 

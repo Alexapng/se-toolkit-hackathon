@@ -84,6 +84,12 @@ h2 {
   margin-top: 0.45rem;
 }
 
+.current-user {
+  margin: 0.65rem 0 0;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+}
+
 label {
   color: var(--text-soft);
   font-size: 0.9rem;
@@ -199,15 +205,6 @@ select:focus {
   color: #944e1c;
 }
 
-.feedback {
-  margin: 0;
-  color: #2c5a48;
-}
-
-.feedback.error {
-  color: #9b2d24;
-}
-
 @keyframes rise {
   from {
     opacity: 0;
@@ -238,4 +235,3 @@ select:focus {
     align-items: stretch;
   }
 }
-

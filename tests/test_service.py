@@ -25,6 +25,15 @@ class HabitServiceTests(unittest.TestCase):
         self.assertEqual(len(habits), 1)
         self.assertEqual(habits[0]["id"], habit["id"])
 
+    def test_get_user_by_name(self) -> None:
+        created = self.service.create_user("Alex")
+        found = self.service.get_user_by_name("Alex")
+        self.assertEqual(found["id"], created["id"])
+        self.assertEqual(found["name"], "Alex")
+
+        with self.assertRaises(LookupError):
+            self.service.get_user_by_name("Unknown")
+
     def test_check_in_marks_habit_completed_for_date(self) -> None:
         user = self.service.create_user("Alex")
         habit = self.service.add_habit(user["id"], "Walk 10 minutes")

@@ -15,17 +15,13 @@
     </header>
 
     <section class="panel">
-      <h2>User</h2>
+      <h2>Your Profile</h2>
       <div class="row">
-        <label for="userSelect">Active user</label>
-        <select id="userSelect"></select>
-        <button id="refreshUsersBtn" type="button" class="btn ghost">Refresh</button>
+        <label for="userNameInput">Your name</label>
+        <input id="userNameInput" type="text" placeholder="Alex">
+        <button id="useNameBtn" type="button" class="btn">Use</button>
       </div>
-      <div class="row">
-        <label for="newUserInput">Create user</label>
-        <input id="newUserInput" type="text" placeholder="Name">
-        <button id="createUserBtn" type="button" class="btn">Create</button>
-      </div>
+      <p id="currentUserText" class="current-user">No user selected yet.</p>
     </section>
 
     <section class="panel">
@@ -56,14 +52,8 @@
         <button id="addHabitBtn" type="button" class="btn">Add</button>
       </div>
     </section>
-
-    <section class="panel">
-      <h2>Activity</h2>
-      <p id="feedbackMessage" class="feedback">Ready.</p>
-    </section>
   </main>
 
   <script src="/app.js" defer></script>
 </body>
 </html>
-
