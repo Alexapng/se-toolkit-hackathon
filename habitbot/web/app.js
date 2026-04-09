@@ -15,6 +15,8 @@ const refs = {
   refreshStatusBtn: document.getElementById("refreshStatusBtn"),
   completedCount: document.getElementById("completedCount"),
   totalCount: document.getElementById("totalCount"),
+  streakCount: document.getElementById("streakCount"),
+  streakMessage: document.getElementById("streakMessage"),
   habitsList: document.getElementById("habitsList"),
   newHabitInput: document.getElementById("newHabitInput"),
   addHabitBtn: document.getElementById("addHabitBtn"),
@@ -63,22 +65,30 @@ function renderHabits() {
   const statusByHabitId = new Map(
     (state.status?.habits || []).map((item) => [item.habit_id, item.completed]),
   );
+  const fallbackCompleted = habits.reduce(
+    (count, habit) => count + (statusByHabitId.get(habit.id) ? 1 : 0),
+    0,
+  );
+  const completed = state.status?.summary?.completed_habits ?? fallbackCompleted;
+  const total = state.status?.summary?.total_habits ?? habits.length;
+  const streakDays = state.status?.streak?.current_streak_days ?? 0;
+  const streakMessage =
+    state.status?.message || "Keep going. Complete all habits today to build your streak.";
+
+  refs.completedCount.textContent = String(completed);
+  refs.totalCount.textContent = String(total);
+  refs.streakCount.textContent = `${streakDays} day${streakDays === 1 ? "" : "s"}`;
+  refs.streakMessage.textContent = streakMessage;
 
   if (habits.length === 0) {
     const empty = document.createElement("p");
     empty.textContent = "No habits yet. Add your first one below.";
     refs.habitsList.appendChild(empty);
-    refs.completedCount.textContent = "0";
-    refs.totalCount.textContent = "0";
     return;
   }
 
-  let completed = 0;
   for (const habit of habits) {
     const isDone = Boolean(statusByHabitId.get(habit.id));
-    if (isDone) {
-      completed += 1;
-    }
 
     const row = document.createElement("div");
     row.className = "habit-row";
@@ -108,9 +118,6 @@ function renderHabits() {
     row.appendChild(button);
     refs.habitsList.appendChild(row);
   }
-
-  refs.completedCount.textContent = String(completed);
-  refs.totalCount.textContent = String(habits.length);
 }
 
 async function resolveOrCreateUser(name) {
@@ -264,4 +271,3 @@ async function start() {
 }
 
 start();
-

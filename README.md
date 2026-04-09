@@ -16,6 +16,13 @@ Track daily completion of small habits with a lightweight backend API, SQLite da
   - database: SQLite (`habitbot.db`)
   - client: web app (`habitbot/web/index.html`, `habitbot/web/app.js`, `habitbot/web/styles.css`)
 
+## Version 2 Scope (Task 4)
+
+- Added streak counter for consecutive days where all habits are completed.
+- Added motivational message in the UI, including:
+  - `Yay! Great job! You started your streak today.`
+  - `Yay! Great job! You're on a N-day streak.`
+
 ## Run Locally
 
 1. Start backend + web app server:

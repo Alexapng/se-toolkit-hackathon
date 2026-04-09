@@ -43,6 +43,10 @@ class HabitServiceTests(unittest.TestCase):
 
         self.assertEqual(len(status["habits"]), 1)
         self.assertTrue(status["habits"][0]["completed"])
+        self.assertEqual(status["summary"]["completed_habits"], 1)
+        self.assertEqual(status["summary"]["total_habits"], 1)
+        self.assertEqual(status["streak"]["current_streak_days"], 1)
+        self.assertIn("Yay! Great job!", status["message"])
 
     def test_duplicate_check_in_same_day_is_idempotent(self) -> None:
         user = self.service.create_user("Alex")
@@ -62,6 +66,37 @@ class HabitServiceTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             self.service.daily_status(999, "09-04-2026")
+
+    def test_streak_requires_all_habits_for_consecutive_days(self) -> None:
+        user = self.service.create_user("Alex")
+        habit1 = self.service.add_habit(user["id"], "Drink water")
+        habit2 = self.service.add_habit(user["id"], "Read 10 pages")
+
+        self.service.check_in(habit1["id"], "2026-04-09")
+        self.service.check_in(habit2["id"], "2026-04-09")
+        self.service.check_in(habit1["id"], "2026-04-10")
+        self.service.check_in(habit2["id"], "2026-04-10")
+
+        status = self.service.daily_status(user["id"], "2026-04-10")
+        self.assertEqual(status["streak"]["current_streak_days"], 2)
+        self.assertIn("2-day streak", status["message"])
+
+    def test_streak_breaks_on_missed_day(self) -> None:
+        user = self.service.create_user("Alex")
+        habit = self.service.add_habit(user["id"], "Workout")
+
+        self.service.check_in(habit["id"], "2026-04-08")
+        self.service.check_in(habit["id"], "2026-04-10")
+
+        status = self.service.daily_status(user["id"], "2026-04-10")
+        self.assertEqual(status["streak"]["current_streak_days"], 1)
+
+    def test_no_habits_has_zero_streak_and_prompt_message(self) -> None:
+        user = self.service.create_user("Alex")
+        status = self.service.daily_status(user["id"], "2026-04-10")
+        self.assertEqual(status["streak"]["current_streak_days"], 0)
+        self.assertEqual(status["summary"]["total_habits"], 0)
+        self.assertIn("Add your first habit", status["message"])
 
 
 if __name__ == "__main__":

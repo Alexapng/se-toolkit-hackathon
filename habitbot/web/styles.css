@@ -148,7 +148,7 @@ select:focus {
   margin: 0.8rem 0;
   display: grid;
   gap: 0.6rem;
-  grid-template-columns: repeat(2, minmax(120px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
 }
 
 .stat {
@@ -203,6 +203,16 @@ select:focus {
 .tag.pending {
   background: #fff2e8;
   color: #944e1c;
+}
+
+.streak-message {
+  margin: 0.05rem 0 0.8rem;
+  padding: 0.65rem 0.7rem;
+  border-radius: 10px;
+  background: #eefaf5;
+  border: 1px solid #cfe8dc;
+  color: #245543;
+  font-weight: 600;
 }
 
 @keyframes rise {
