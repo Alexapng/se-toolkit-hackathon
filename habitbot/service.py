@@ -41,6 +41,23 @@ class HabitService:
             rows = conn.execute("SELECT id, name FROM users ORDER BY id").fetchall()
             return [dict(row) for row in rows]
 
+    def resolve_or_create_user(self, name: str) -> Record:
+        clean_name = name.strip()
+        if not clean_name:
+            raise ValueError("name cannot be empty")
+
+        with get_connection(self.db_path) as conn:
+            user = conn.execute(
+                "SELECT id, name FROM users WHERE name = ?",
+                (clean_name,),
+            ).fetchone()
+            if user is not None:
+                return dict(user)
+
+            cursor = conn.execute("INSERT INTO users(name) VALUES (?)", (clean_name,))
+            conn.commit()
+            return {"id": cursor.lastrowid, "name": clean_name}
+
     def get_user_by_name(self, name: str) -> Record:
         clean_name = name.strip()
         if not clean_name:
@@ -54,6 +71,202 @@ class HabitService:
             if row is None:
                 raise LookupError("user not found")
             return dict(row)
+
+    def register_telegram_profile(
+        self,
+        telegram_user_id: int,
+        chat_id: int,
+        profile_name: str,
+        username: str | None,
+    ) -> Record:
+        clean_profile_name = profile_name.strip()
+        if not clean_profile_name:
+            raise ValueError("profile_name cannot be empty")
+
+        clean_username = username.strip() if isinstance(username, str) else None
+        clean_username = clean_username or None
+
+        with get_connection(self.db_path) as conn:
+            existing = conn.execute(
+                """
+                SELECT
+                    tp.telegram_user_id,
+                    tp.chat_id,
+                    tp.user_id,
+                    tp.username,
+                    u.name AS user_name
+                FROM telegram_profiles tp
+                JOIN users u ON u.id = tp.user_id
+                WHERE tp.telegram_user_id = ?
+                """,
+                (telegram_user_id,),
+            ).fetchone()
+
+            if existing is not None:
+                conn.execute(
+                    """
+                    UPDATE telegram_profiles
+                    SET chat_id = ?, username = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE telegram_user_id = ?
+                    """,
+                    (chat_id, clean_username, telegram_user_id),
+                )
+                conn.commit()
+                return {
+                    "telegram_user_id": int(existing["telegram_user_id"]),
+                    "chat_id": int(chat_id),
+                    "user_id": int(existing["user_id"]),
+                    "user_name": str(existing["user_name"]),
+                    "username": clean_username,
+                }
+
+            user = self._resolve_or_create_user_in_tx(conn, clean_profile_name)
+            conn.execute(
+                """
+                INSERT INTO telegram_profiles(
+                    telegram_user_id,
+                    chat_id,
+                    user_id,
+                    username,
+                    notifications_enabled,
+                    notification_hour
+                )
+                VALUES (?, ?, ?, ?, 1, 20)
+                """,
+                (telegram_user_id, chat_id, int(user["id"]), clean_username),
+            )
+            conn.commit()
+            return {
+                "telegram_user_id": int(telegram_user_id),
+                "chat_id": int(chat_id),
+                "user_id": int(user["id"]),
+                "user_name": str(user["name"]),
+                "username": clean_username,
+            }
+
+    def get_telegram_profile(self, telegram_user_id: int) -> Record:
+        with get_connection(self.db_path) as conn:
+            row = conn.execute(
+                """
+                SELECT
+                    tp.telegram_user_id,
+                    tp.chat_id,
+                    tp.user_id,
+                    tp.username,
+                    tp.notifications_enabled,
+                    tp.notification_hour,
+                    tp.last_notification_date,
+                    u.name AS user_name
+                FROM telegram_profiles tp
+                JOIN users u ON u.id = tp.user_id
+                WHERE tp.telegram_user_id = ?
+                """,
+                (telegram_user_id,),
+            ).fetchone()
+            if row is None:
+                raise LookupError("telegram profile not found")
+            return {
+                "telegram_user_id": int(row["telegram_user_id"]),
+                "chat_id": int(row["chat_id"]),
+                "user_id": int(row["user_id"]),
+                "user_name": str(row["user_name"]),
+                "username": row["username"],
+                "notifications_enabled": bool(row["notifications_enabled"]),
+                "notification_hour": int(row["notification_hour"]),
+                "last_notification_date": row["last_notification_date"],
+            }
+
+    def set_telegram_notifications(
+        self,
+        telegram_user_id: int,
+        enabled: bool,
+        notification_hour: int | None = None,
+    ) -> Record:
+        if notification_hour is not None and not (0 <= notification_hour <= 23):
+            raise ValueError("notification_hour must be in range 0..23")
+
+        with get_connection(self.db_path) as conn:
+            existing = conn.execute(
+                "SELECT telegram_user_id FROM telegram_profiles WHERE telegram_user_id = ?",
+                (telegram_user_id,),
+            ).fetchone()
+            if existing is None:
+                raise LookupError("telegram profile not found")
+
+            if notification_hour is None:
+                conn.execute(
+                    """
+                    UPDATE telegram_profiles
+                    SET notifications_enabled = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE telegram_user_id = ?
+                    """,
+                    (1 if enabled else 0, telegram_user_id),
+                )
+            else:
+                conn.execute(
+                    """
+                    UPDATE telegram_profiles
+                    SET notifications_enabled = ?,
+                        notification_hour = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE telegram_user_id = ?
+                    """,
+                    (1 if enabled else 0, notification_hour, telegram_user_id),
+                )
+            conn.commit()
+
+        return self.get_telegram_profile(telegram_user_id)
+
+    def list_telegram_notification_targets(self, current_date: str, hour: int) -> list[Record]:
+        normalized_date = _normalize_date(current_date)
+        if not (0 <= hour <= 23):
+            raise ValueError("hour must be in range 0..23")
+
+        with get_connection(self.db_path) as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                    tp.telegram_user_id,
+                    tp.chat_id,
+                    tp.user_id,
+                    tp.username,
+                    tp.notification_hour,
+                    tp.last_notification_date,
+                    u.name AS user_name
+                FROM telegram_profiles tp
+                JOIN users u ON u.id = tp.user_id
+                WHERE tp.notifications_enabled = 1
+                  AND tp.notification_hour = ?
+                  AND (tp.last_notification_date IS NULL OR tp.last_notification_date <> ?)
+                ORDER BY tp.telegram_user_id
+                """,
+                (hour, normalized_date),
+            ).fetchall()
+            return [
+                {
+                    "telegram_user_id": int(row["telegram_user_id"]),
+                    "chat_id": int(row["chat_id"]),
+                    "user_id": int(row["user_id"]),
+                    "user_name": str(row["user_name"]),
+                    "username": row["username"],
+                    "notification_hour": int(row["notification_hour"]),
+                    "last_notification_date": row["last_notification_date"],
+                }
+                for row in rows
+            ]
+
+    def mark_telegram_notification_sent(self, telegram_user_id: int, current_date: str) -> None:
+        normalized_date = _normalize_date(current_date)
+        with get_connection(self.db_path) as conn:
+            conn.execute(
+                """
+                UPDATE telegram_profiles
+                SET last_notification_date = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE telegram_user_id = ?
+                """,
+                (normalized_date, telegram_user_id),
+            )
+            conn.commit()
 
     def add_habit(self, user_id: int, name: str) -> Record:
         clean_name = name.strip()
@@ -223,3 +436,18 @@ class HabitService:
         row = conn.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
         if row is None:
             raise LookupError("user not found")
+
+    @staticmethod
+    def _resolve_or_create_user_in_tx(conn: sqlite3.Connection, name: str) -> Record:
+        existing = conn.execute("SELECT id, name FROM users WHERE name = ?", (name,)).fetchone()
+        if existing is not None:
+            return dict(existing)
+
+        try:
+            cursor = conn.execute("INSERT INTO users(name) VALUES (?)", (name,))
+            return {"id": cursor.lastrowid, "name": name}
+        except sqlite3.IntegrityError:
+            row = conn.execute("SELECT id, name FROM users WHERE name = ?", (name,)).fetchone()
+            if row is None:
+                raise
+            return dict(row)

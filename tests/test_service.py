@@ -98,6 +98,83 @@ class HabitServiceTests(unittest.TestCase):
         self.assertEqual(status["summary"]["total_habits"], 0)
         self.assertIn("Add your first habit", status["message"])
 
+    def test_register_telegram_profile_creates_and_reuses_user(self) -> None:
+        linked = self.service.register_telegram_profile(
+            telegram_user_id=111,
+            chat_id=222,
+            profile_name="alex_nickname",
+            username="alex_nickname",
+        )
+        self.assertEqual(linked["user_name"], "alex_nickname")
+
+        profile = self.service.get_telegram_profile(111)
+        self.assertEqual(profile["chat_id"], 222)
+        self.assertEqual(profile["user_name"], "alex_nickname")
+        self.assertTrue(profile["notifications_enabled"])
+        self.assertEqual(profile["notification_hour"], 20)
+
+        updated = self.service.register_telegram_profile(
+            telegram_user_id=111,
+            chat_id=999,
+            profile_name="another_name_should_be_ignored",
+            username="alex_new",
+        )
+        self.assertEqual(updated["user_name"], "alex_nickname")
+        profile_after = self.service.get_telegram_profile(111)
+        self.assertEqual(profile_after["chat_id"], 999)
+        self.assertEqual(profile_after["username"], "alex_new")
+
+    def test_telegram_notifications_targets_and_mark_sent(self) -> None:
+        linked = self.service.register_telegram_profile(
+            telegram_user_id=333,
+            chat_id=444,
+            profile_name="telegram_user",
+            username="telegram_user",
+        )
+        targets = self.service.list_telegram_notification_targets(
+            current_date="2026-04-10",
+            hour=20,
+        )
+        self.assertEqual(len(targets), 1)
+        self.assertEqual(targets[0]["telegram_user_id"], 333)
+        self.assertEqual(targets[0]["user_id"], linked["user_id"])
+
+        self.service.mark_telegram_notification_sent(333, "2026-04-10")
+        targets_after_mark = self.service.list_telegram_notification_targets(
+            current_date="2026-04-10",
+            hour=20,
+        )
+        self.assertEqual(len(targets_after_mark), 0)
+
+    def test_set_telegram_notifications(self) -> None:
+        self.service.register_telegram_profile(
+            telegram_user_id=555,
+            chat_id=777,
+            profile_name="notify_user",
+            username="notify_user",
+        )
+        profile_disabled = self.service.set_telegram_notifications(
+            telegram_user_id=555,
+            enabled=False,
+            notification_hour=9,
+        )
+        self.assertFalse(profile_disabled["notifications_enabled"])
+        self.assertEqual(profile_disabled["notification_hour"], 9)
+
+        profile_enabled = self.service.set_telegram_notifications(
+            telegram_user_id=555,
+            enabled=True,
+            notification_hour=None,
+        )
+        self.assertTrue(profile_enabled["notifications_enabled"])
+
+        with self.assertRaises(ValueError):
+            self.service.set_telegram_notifications(
+                telegram_user_id=555,
+                enabled=True,
+                notification_hour=24,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

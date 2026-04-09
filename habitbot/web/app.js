@@ -22,6 +22,48 @@ const refs = {
   addHabitBtn: document.getElementById("addHabitBtn"),
 };
 
+function readTelegramMiniAppProfileName() {
+  const telegram = window.Telegram?.WebApp;
+  if (!telegram) {
+    return null;
+  }
+
+  try {
+    telegram.ready();
+    telegram.expand();
+  } catch (_err) {
+    // Ignore optional Telegram WebApp API errors.
+  }
+
+  const user = telegram.initDataUnsafe?.user;
+  if (!user) {
+    return null;
+  }
+
+  const username = String(user.username || "").trim();
+  if (username) {
+    return username;
+  }
+
+  const firstName = String(user.first_name || "").trim();
+  const lastName = String(user.last_name || "").trim();
+  const fullName = `${firstName} ${lastName}`.trim();
+  if (fullName) {
+    return fullName;
+  }
+
+  if (user.id) {
+    return `telegram_${user.id}`;
+  }
+  return null;
+}
+
+function readNameFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const byQuery = (params.get("tg_name") || "").trim();
+  return byQuery || null;
+}
+
 function currentDateValue() {
   if (!refs.statusDateInput.value) {
     refs.statusDateInput.value = new Date().toISOString().slice(0, 10);
@@ -257,16 +299,21 @@ async function start() {
   bindEvents();
   updateCurrentUserText();
 
+  const telegramName = readTelegramMiniAppProfileName();
+  const queryName = readNameFromUrl();
   const savedName = localStorage.getItem(USER_NAME_KEY);
-  if (savedName) {
-    refs.userNameInput.value = savedName;
-    try {
-      await applyUserName();
-    } catch (err) {
-      alert(err.message);
-    }
-  } else {
+  const resolvedName = telegramName || queryName || savedName;
+
+  if (!resolvedName) {
     renderHabits();
+    return;
+  }
+
+  refs.userNameInput.value = resolvedName;
+  try {
+    await applyUserName();
+  } catch (err) {
+    alert(err.message);
   }
 }
 

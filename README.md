@@ -22,6 +22,10 @@ Track daily completion of small habits with a lightweight backend API, SQLite da
 - Added motivational message in the UI, including:
   - `Yay! Great job! You started your streak today.`
   - `Yay! Great job! You're on a N-day streak.`
+- Added Telegram bot integration:
+  - `/start` links Telegram nickname to the habit profile name;
+  - bot sends Mini App button to open the web app in Telegram;
+  - daily Telegram streak reminders (`/notify_on`, `/notify_off`).
 
 ## Run Locally
 
@@ -97,3 +101,37 @@ sudo systemctl stop habitbot
 sudo systemctl start habitbot
 sudo journalctl -u habitbot -f
 ```
+
+## Telegram Mini App Setup
+
+Requirements:
+
+- Telegram bot token from `@BotFather`.
+- Public HTTPS URL for your web app (for example `https://your-domain.com`).
+- In `@BotFather`, set Mini App URL to the same HTTPS URL.
+
+Run Telegram bot service on VM:
+
+```bash
+cd ~/se-toolkit-hackathon
+git fetch origin
+git checkout feature/task3-habit-bot-v1
+git pull
+chmod +x deploy/install_telegram_bot_systemd.sh
+./deploy/install_telegram_bot_systemd.sh --token "<BOT_TOKEN>" --web-app-url "https://<YOUR_PUBLIC_HTTPS_URL>"
+```
+
+Check bot service:
+
+```bash
+sudo systemctl status habitbot-telegram
+sudo journalctl -u habitbot-telegram -f
+```
+
+Supported Telegram commands:
+
+- `/start` - link Telegram account and open Mini App button
+- `/open` - send Mini App button again
+- `/streak` - current streak summary
+- `/notify_on [hour]` - enable daily reminders (hour 0..23, default `20`)
+- `/notify_off` - disable daily reminders
