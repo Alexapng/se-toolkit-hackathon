@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -12,6 +13,21 @@ from .service import HabitService
 
 def _build_handler(service: HabitService) -> type[BaseHTTPRequestHandler]:
     web_root = Path(__file__).resolve().parent / "web"
+    asset_files = ("index.html", "styles.css", "app.js")
+
+    def _asset_version_token() -> str:
+        # Optional fixed version for deployments; otherwise derive from static file mtimes.
+        forced = os.getenv("HABITBOT_ASSET_VERSION", "").strip()
+        if forced:
+            return forced
+
+        newest_mtime_ns = 0
+        for file_name in asset_files:
+            file_path = web_root / file_name
+            if not file_path.exists():
+                continue
+            newest_mtime_ns = max(newest_mtime_ns, file_path.stat().st_mtime_ns)
+        return str(newest_mtime_ns or 0)
 
     class HabitApiHandler(BaseHTTPRequestHandler):
         _service = service
@@ -23,13 +39,18 @@ def _build_handler(service: HabitService) -> type[BaseHTTPRequestHandler]:
 
             try:
                 if parsed.path in {"/", "/index.html"}:
-                    self._send_static_file(web_root / "index.html", "text/html; charset=utf-8")
+                    self._send_index_file(web_root / "index.html")
                 elif parsed.path == "/styles.css":
-                    self._send_static_file(web_root / "styles.css", "text/css; charset=utf-8")
+                    self._send_static_file(
+                        web_root / "styles.css",
+                        "text/css; charset=utf-8",
+                        cache_control="public, max-age=31536000, immutable",
+                    )
                 elif parsed.path == "/app.js":
                     self._send_static_file(
                         web_root / "app.js",
                         "application/javascript; charset=utf-8",
+                        cache_control="public, max-age=31536000, immutable",
                     )
                 elif parsed.path == "/health":
                     self._send_json(HTTPStatus.OK, {"status": "ok"})
@@ -111,7 +132,28 @@ def _build_handler(service: HabitService) -> type[BaseHTTPRequestHandler]:
 
             self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "internal server error"})
 
-        def _send_static_file(self, file_path: Path, content_type: str) -> None:
+        def _send_index_file(self, file_path: Path) -> None:
+            if not file_path.exists() or not file_path.is_file():
+                self._send_json(HTTPStatus.NOT_FOUND, {"error": "static file not found"})
+                return
+
+            asset_suffix = f"?v={_asset_version_token()}"
+            template = file_path.read_text(encoding="utf-8")
+            body = template.replace("{{ASSET_SUFFIX}}", asset_suffix).encode("utf-8")
+
+            self.send_response(HTTPStatus.OK.value)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _send_static_file(
+            self,
+            file_path: Path,
+            content_type: str,
+            cache_control: str | None = None,
+        ) -> None:
             if not file_path.exists() or not file_path.is_file():
                 self._send_json(HTTPStatus.NOT_FOUND, {"error": "static file not found"})
                 return
@@ -119,6 +161,8 @@ def _build_handler(service: HabitService) -> type[BaseHTTPRequestHandler]:
             body = file_path.read_bytes()
             self.send_response(HTTPStatus.OK.value)
             self.send_header("Content-Type", content_type)
+            if cache_control:
+                self.send_header("Cache-Control", cache_control)
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)

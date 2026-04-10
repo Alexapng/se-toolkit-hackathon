@@ -131,6 +131,12 @@ sudo systemctl status habitbot-telegram
 sudo journalctl -u habitbot-telegram -f
 ```
 
+Mini App cache behavior:
+
+- Frontend assets (`app.js`, `styles.css`) are automatically versioned by the backend.
+- After deploying frontend changes, restart `habitbot` and reopen the Mini App in Telegram.
+- You do not need to manually add `?v=...` to `TELEGRAM_WEB_APP_URL`.
+
 Supported Telegram commands:
 
 - `/start` - link Telegram account and open Mini App button
