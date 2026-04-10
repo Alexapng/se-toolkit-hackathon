@@ -7,6 +7,8 @@ const state = {
   isBusy: false,
 };
 
+const DEFAULT_REQUEST_TIMEOUT_MS = 12000;
+
 const refs = {
   currentUserText: document.getElementById("currentUserText"),
   statusDateInput: document.getElementById("statusDateInput"),
@@ -44,8 +46,24 @@ function currentDateValue() {
   return refs.statusDateInput.value;
 }
 
-async function request(path, options = {}) {
-  const response = await fetch(path, options);
+async function request(path, options = {}, timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  let response;
+  try {
+    response = await fetch(path, { ...options, signal: controller.signal });
+  } catch (err) {
+    if (err?.name === "AbortError") {
+      throw new Error(
+        "Request timed out. Check tunnel/backend service, then try again.",
+      );
+    }
+    throw new Error("Network error. Check tunnel/backend service, then try again.");
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+
   let payload = {};
   try {
     payload = await response.json();
@@ -266,7 +284,18 @@ async function deleteHabit(habitId) {
     await request(`/habits?user_id=${userId}&habit_id=${encodedHabitId}`, {
       method: "DELETE",
     });
-    await loadDashboard();
+    // Keep UI responsive even if a follow-up refresh request fails.
+    state.habits = state.habits.filter((habit) => habit.id !== habitId);
+    if (state.status?.habits) {
+      state.status.habits = state.status.habits.filter((habit) => habit.habit_id !== habitId);
+    }
+    renderHabits();
+
+    try {
+      await loadDashboard();
+    } catch (refreshErr) {
+      console.warn("Post-delete refresh failed:", refreshErr);
+    }
   } finally {
     setBusy(false);
   }
