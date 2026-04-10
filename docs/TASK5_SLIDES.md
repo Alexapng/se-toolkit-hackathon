@@ -5,9 +5,9 @@ Use this as ready content for your 5-slide PDF.
 ## Slide 1 - Title
 
 - Product title: `Minimal Habit Bot`
-- Name: `<YOUR_NAME>`
-- University email: `<YOUR_UNIVERSITY_EMAIL>`
-- Group: `<YOUR_GROUP>`
+- Name: `Alexandra Pokhvalova`
+- University email: `a.pokhvalova@innopolis.university`
+- Group: `CSE-01`
 
 ## Slide 2 - Context
 
@@ -61,4 +61,3 @@ If `qrencode` is installed:
 qrencode -o github-qr.png "https://github.com/Alexapng/se-toolkit-hackathon"
 qrencode -o app-qr.png "https://<YOUR_DEPLOYED_HTTPS_URL>"
 ```
-
