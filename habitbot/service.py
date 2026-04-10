@@ -129,9 +129,10 @@ class HabitService:
                     user_id,
                     username,
                     notifications_enabled,
-                    notification_hour
+                    notification_hour,
+                    notification_minute
                 )
-                VALUES (?, ?, ?, ?, 1, 20)
+                VALUES (?, ?, ?, ?, 1, 20, 0)
                 """,
                 (telegram_user_id, chat_id, int(user["id"]), clean_username),
             )
@@ -155,6 +156,7 @@ class HabitService:
                     tp.username,
                     tp.notifications_enabled,
                     tp.notification_hour,
+                    tp.notification_minute,
                     tp.last_notification_date,
                     u.name AS user_name
                 FROM telegram_profiles tp
@@ -173,6 +175,7 @@ class HabitService:
                 "username": row["username"],
                 "notifications_enabled": bool(row["notifications_enabled"]),
                 "notification_hour": int(row["notification_hour"]),
+                "notification_minute": int(row["notification_minute"]),
                 "last_notification_date": row["last_notification_date"],
             }
 
@@ -181,9 +184,14 @@ class HabitService:
         telegram_user_id: int,
         enabled: bool,
         notification_hour: int | None = None,
+        notification_minute: int | None = None,
     ) -> Record:
         if notification_hour is not None and not (0 <= notification_hour <= 23):
             raise ValueError("notification_hour must be in range 0..23")
+        if notification_minute is not None and not (0 <= notification_minute <= 59):
+            raise ValueError("notification_minute must be in range 0..59")
+        if notification_hour is None and notification_minute is not None:
+            raise ValueError("notification_minute cannot be set without notification_hour")
 
         with get_connection(self.db_path) as conn:
             existing = conn.execute(
@@ -203,24 +211,28 @@ class HabitService:
                     (1 if enabled else 0, telegram_user_id),
                 )
             else:
+                minute_to_set = 0 if notification_minute is None else notification_minute
                 conn.execute(
                     """
                     UPDATE telegram_profiles
                     SET notifications_enabled = ?,
                         notification_hour = ?,
+                        notification_minute = ?,
                         updated_at = CURRENT_TIMESTAMP
                     WHERE telegram_user_id = ?
                     """,
-                    (1 if enabled else 0, notification_hour, telegram_user_id),
+                    (1 if enabled else 0, notification_hour, minute_to_set, telegram_user_id),
                 )
             conn.commit()
 
         return self.get_telegram_profile(telegram_user_id)
 
-    def list_telegram_notification_targets(self, current_date: str, hour: int) -> list[Record]:
+    def list_telegram_notification_targets(self, current_date: str, hour: int, minute: int) -> list[Record]:
         normalized_date = _normalize_date(current_date)
         if not (0 <= hour <= 23):
             raise ValueError("hour must be in range 0..23")
+        if not (0 <= minute <= 59):
+            raise ValueError("minute must be in range 0..59")
 
         with get_connection(self.db_path) as conn:
             rows = conn.execute(
@@ -231,16 +243,18 @@ class HabitService:
                     tp.user_id,
                     tp.username,
                     tp.notification_hour,
+                    tp.notification_minute,
                     tp.last_notification_date,
                     u.name AS user_name
                 FROM telegram_profiles tp
                 JOIN users u ON u.id = tp.user_id
                 WHERE tp.notifications_enabled = 1
                   AND tp.notification_hour = ?
+                  AND tp.notification_minute = ?
                   AND (tp.last_notification_date IS NULL OR tp.last_notification_date <> ?)
                 ORDER BY tp.telegram_user_id
                 """,
-                (hour, normalized_date),
+                (hour, minute, normalized_date),
             ).fetchall()
             return [
                 {
@@ -250,6 +264,7 @@ class HabitService:
                     "user_name": str(row["user_name"]),
                     "username": row["username"],
                     "notification_hour": int(row["notification_hour"]),
+                    "notification_minute": int(row["notification_minute"]),
                     "last_notification_date": row["last_notification_date"],
                 }
                 for row in rows

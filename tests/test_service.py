@@ -130,6 +130,7 @@ class HabitServiceTests(unittest.TestCase):
         self.assertEqual(profile["user_name"], "alex_nickname")
         self.assertTrue(profile["notifications_enabled"])
         self.assertEqual(profile["notification_hour"], 20)
+        self.assertEqual(profile["notification_minute"], 0)
 
         updated = self.service.register_telegram_profile(
             telegram_user_id=111,
@@ -152,15 +153,37 @@ class HabitServiceTests(unittest.TestCase):
         targets = self.service.list_telegram_notification_targets(
             current_date="2026-04-10",
             hour=20,
+            minute=0,
         )
         self.assertEqual(len(targets), 1)
         self.assertEqual(targets[0]["telegram_user_id"], 333)
         self.assertEqual(targets[0]["user_id"], linked["user_id"])
+        self.assertEqual(targets[0]["notification_minute"], 0)
+
+        self.service.set_telegram_notifications(
+            telegram_user_id=333,
+            enabled=True,
+            notification_hour=20,
+            notification_minute=32,
+        )
+        targets_wrong_minute = self.service.list_telegram_notification_targets(
+            current_date="2026-04-10",
+            hour=20,
+            minute=0,
+        )
+        self.assertEqual(len(targets_wrong_minute), 0)
+        targets_right_minute = self.service.list_telegram_notification_targets(
+            current_date="2026-04-10",
+            hour=20,
+            minute=32,
+        )
+        self.assertEqual(len(targets_right_minute), 1)
 
         self.service.mark_telegram_notification_sent(333, "2026-04-10")
         targets_after_mark = self.service.list_telegram_notification_targets(
             current_date="2026-04-10",
             hour=20,
+            minute=32,
         )
         self.assertEqual(len(targets_after_mark), 0)
 
@@ -175,14 +198,17 @@ class HabitServiceTests(unittest.TestCase):
             telegram_user_id=555,
             enabled=False,
             notification_hour=9,
+            notification_minute=15,
         )
         self.assertFalse(profile_disabled["notifications_enabled"])
         self.assertEqual(profile_disabled["notification_hour"], 9)
+        self.assertEqual(profile_disabled["notification_minute"], 15)
 
         profile_enabled = self.service.set_telegram_notifications(
             telegram_user_id=555,
             enabled=True,
             notification_hour=None,
+            notification_minute=None,
         )
         self.assertTrue(profile_enabled["notifications_enabled"])
 
@@ -191,6 +217,15 @@ class HabitServiceTests(unittest.TestCase):
                 telegram_user_id=555,
                 enabled=True,
                 notification_hour=24,
+                notification_minute=0,
+            )
+
+        with self.assertRaises(ValueError):
+            self.service.set_telegram_notifications(
+                telegram_user_id=555,
+                enabled=True,
+                notification_hour=12,
+                notification_minute=60,
             )
 
 

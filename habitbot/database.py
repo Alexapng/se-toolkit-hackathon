@@ -48,6 +48,7 @@ def init_db(db_path: str) -> None:
                 username TEXT,
                 notifications_enabled INTEGER NOT NULL DEFAULT 1,
                 notification_hour INTEGER NOT NULL DEFAULT 20,
+                notification_minute INTEGER NOT NULL DEFAULT 0,
                 last_notification_date TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -58,8 +59,21 @@ def init_db(db_path: str) -> None:
             CREATE INDEX IF NOT EXISTS idx_checkins_habit_date ON checkins(habit_id, checkin_date);
             CREATE INDEX IF NOT EXISTS idx_tg_profiles_user_id ON telegram_profiles(user_id);
             CREATE INDEX IF NOT EXISTS idx_tg_profiles_notify_hour ON telegram_profiles(notification_hour);
+            CREATE INDEX IF NOT EXISTS idx_tg_profiles_notify_time
+              ON telegram_profiles(notification_hour, notification_minute);
             """
         )
+        tg_columns = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(telegram_profiles)").fetchall()
+        }
+        if "notification_minute" not in tg_columns:
+            conn.execute(
+                """
+                ALTER TABLE telegram_profiles
+                ADD COLUMN notification_minute INTEGER NOT NULL DEFAULT 0
+                """
+            )
         conn.commit()
 
 

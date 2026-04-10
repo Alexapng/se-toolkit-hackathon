@@ -64,7 +64,7 @@ class TelegramBot:
         commands = [
             {"command": "start", "description": "Link your profile and open mini app"},
             {"command": "streak", "description": "Show your current streak"},
-            {"command": "notify_on", "description": "Enable daily reminders (/notify_on 20)"},
+            {"command": "notify_on", "description": "Enable reminders (/notify_on 20:30)"},
             {"command": "notify_off", "description": "Disable daily reminders"},
             {"command": "open", "description": "Send mini app button again"},
             {"command": "help", "description": "Show commands"},
@@ -182,7 +182,8 @@ class TelegramBot:
         welcome_lines = [
             f"Hi, @{username}!",
             f"Your profile is linked as: {linked['user_name']}",
-            "Use /streak to check progress and /notify_on or /notify_off for reminders.",
+            "Available commands:",
+            *self._command_help_lines(),
         ]
         if self._web_app_url:
             welcome_lines.append("Tap the button below to open your Habit Mini App.")
@@ -196,17 +197,21 @@ class TelegramBot:
         )
 
     def _handle_help(self, chat_id: int) -> None:
-        text = "\n".join(
-            [
-                "Commands:",
-                "/start - link Telegram to your habit profile",
-                "/open - open Mini App button",
-                "/streak - show current streak",
-                "/notify_on [hour] - enable daily reminders (0..23, default 20)",
-                "/notify_off - disable daily reminders",
-            ]
-        )
+        text = "\n".join(["Commands:"] + self._command_help_lines())
         self._send_message(chat_id, text, reply_markup=self._open_app_markup())
+
+    @staticmethod
+    def _command_help_lines() -> list[str]:
+        return [
+            "/start - link your Telegram account and show this help",
+            "/open - send Mini App button",
+            "/streak - show current streak and today's progress",
+            "/notify_on - enable reminders (default 20:00)",
+            "/notify_on 21 - enable reminders at 21:00",
+            "/notify_on 04:32 - enable reminders at 04:32",
+            "/notify_off - disable reminders",
+            "/help - show commands",
+        ]
 
     def _handle_open(self, chat_id: int) -> None:
         if not self._web_app_url:
@@ -229,22 +234,19 @@ class TelegramBot:
         self._send_message(chat_id, "\n".join(lines), reply_markup=self._open_app_markup())
 
     def _handle_notify_on(self, chat_id: int, telegram_user_id: int, argument: str) -> None:
-        hour = 20
-        if argument:
-            try:
-                hour = int(argument)
-            except ValueError as exc:
-                raise ValueError("Usage: /notify_on [hour], where hour is 0..23") from exc
+        hour, minute = self._parse_notify_time(argument)
 
         profile = self._service.set_telegram_notifications(
             telegram_user_id=telegram_user_id,
             enabled=True,
             notification_hour=hour,
+            notification_minute=minute,
         )
         self._send_message(
             chat_id,
             (
-                f"Daily reminders enabled at {profile['notification_hour']:02d}:00 "
+                f"Daily reminders enabled at "
+                f"{profile['notification_hour']:02d}:{profile['notification_minute']:02d} "
                 f"({self._timezone}). I'll remind you to check pending habits."
             ),
             reply_markup=self._open_app_markup(),
@@ -255,17 +257,55 @@ class TelegramBot:
             telegram_user_id=telegram_user_id,
             enabled=False,
             notification_hour=None,
+            notification_minute=None,
         )
         self._send_message(chat_id, "Daily reminders disabled.")
+
+    @staticmethod
+    def _parse_notify_time(argument: str) -> tuple[int, int]:
+        value = argument.strip()
+        if not value:
+            return 20, 0
+
+        if ":" in value:
+            pieces = value.split(":")
+            if len(pieces) != 2:
+                raise ValueError("Usage: /notify_on [HH:MM] or /notify_on [hour]")
+            hour_str, minute_str = pieces[0].strip(), pieces[1].strip()
+            try:
+                hour = int(hour_str)
+                minute = int(minute_str)
+            except ValueError as exc:
+                raise ValueError("Usage: /notify_on [HH:MM] or /notify_on [hour]") from exc
+
+            if not (0 <= hour <= 23):
+                raise ValueError("Hour must be in range 0..23")
+            if not (0 <= minute <= 59):
+                raise ValueError("Minute must be in range 0..59")
+            return hour, minute
+
+        try:
+            hour = int(value)
+        except ValueError as exc:
+            raise ValueError("Usage: /notify_on [HH:MM] or /notify_on [hour]") from exc
+
+        if not (0 <= hour <= 23):
+            raise ValueError("Hour must be in range 0..23")
+        return hour, 0
 
     def _notifications_loop(self) -> None:
         while not self._stop_event.is_set():
             now = datetime.now(self._timezone)
             today = now.date().isoformat()
             hour = now.hour
+            minute = now.minute
 
             try:
-                targets = self._service.list_telegram_notification_targets(current_date=today, hour=hour)
+                targets = self._service.list_telegram_notification_targets(
+                    current_date=today,
+                    hour=hour,
+                    minute=minute,
+                )
                 for target in targets:
                     status = self._service.daily_status(int(target["user_id"]), today)
                     text = self._build_reminder_text(

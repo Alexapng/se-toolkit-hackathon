@@ -40,7 +40,7 @@ Not yet implemented:
 3. Add habits (for example: `Drink water`, `Walk 10 minutes`).
 4. Use `Check in` daily to mark completed habits.
 5. View streak and message in the app, or use `/streak` in Telegram.
-6. Enable reminders with `/notify_on 20` (or another hour `0..23`).
+6. Enable reminders with `/notify_on 20` or `/notify_on 04:32` (time formats: `hour` or `HH:MM`).
 
 ## Deployment
 
@@ -103,4 +103,3 @@ sudo systemctl restart habitbot-telegram
 sudo journalctl -u habitbot -f
 sudo journalctl -u habitbot-telegram -f
 ```
-
