@@ -1,70 +1,63 @@
 # Minimal Habit Bot
 
-Track daily completion of small habits with a lightweight backend API, SQLite database, and personal web app client.
+Minimal Telegram Mini App for tracking daily habits with one-tap check-ins and streak motivation.
+
+## Demo
+
+Replace these placeholders with real screenshots before final submission.
+
+![Mini App dashboard](docs/screenshots/miniapp-dashboard-placeholder.svg)
+![Telegram bot reminder](docs/screenshots/telegram-bot-placeholder.svg)
 
 ## Product Context
 
-- End user: people who want to build better daily habits.
-- Problem: users struggle to stay consistent with small daily actions.
-- Solution: a minimal habit bot to check in each selected habit every day.
+- End users: people who want to build better daily habits.
+- Problem: people struggle to stay consistent with small daily actions.
+- Solution: a lightweight habit tracker where users check in habits daily, track streaks, and receive Telegram reminders.
 
-## Version 1 Scope (Task 3)
+## Features
 
-- Core feature implemented: daily check-in for selected habits.
-- Components:
-  - backend API: `habitbot/api.py`
-  - database: SQLite (`habitbot.db`)
-  - client: web app (`habitbot/web/index.html`, `habitbot/web/app.js`, `habitbot/web/styles.css`)
+Implemented:
 
-## Version 2 Scope (Task 4)
+- Daily check-in for selected habits.
+- Add and delete habits.
+- Daily status by date.
+- Streak counter with motivational messages.
+- Telegram Mini App profile linking via Telegram `@username`.
+- Telegram bot commands: `/start`, `/open`, `/streak`, `/notify_on`, `/notify_off`.
+- Daily reminder messages with pending habits context.
 
-- Added streak counter for consecutive days where all habits are completed.
-- Added motivational message in the UI, including:
-  - `Yay! Great job! You started your streak today.`
-  - `Yay! Great job! You're on a N-day streak.`
-- Added habit deletion from the web app.
-- Added Telegram bot integration:
-  - `/start` links Telegram `@username` to the habit profile name;
-  - bot sends Mini App button to open the web app in Telegram;
-  - daily Telegram reminders include pending habits and streak info (`/notify_on`, `/notify_off`).
+Not yet implemented:
 
-## Run Locally
+- Custom reminder text templates per user.
+- Habit categories/tags and analytics charts.
+- Full multi-language UI.
 
-1. Start backend + web app server:
+## Usage
 
-```powershell
-$env:UV_CACHE_DIR='.uv-cache'; $env:UV_PYTHON_INSTALL_DIR='.uv-python'; uv run --python 3.12 python -m habitbot.api --host 127.0.0.1 --port 8000
-```
+1. Open the Telegram bot and send `/start`.
+2. Tap `Open Habit Mini App`.
+3. Add habits (for example: `Drink water`, `Walk 10 minutes`).
+4. Use `Check in` daily to mark completed habits.
+5. View streak and message in the app, or use `/streak` in Telegram.
+6. Enable reminders with `/notify_on 20` (or another hour `0..23`).
 
-2. Check server health:
+## Deployment
 
-`http://127.0.0.1:8000/health`
+Target VM OS:
 
-3. Use it from Telegram Mini App:
+- Ubuntu 24.04
 
-- Send `/start` to your bot in Telegram.
-- Tap `Open Habit Mini App`.
-- The app automatically uses your Telegram `@username`.
-- Add habits, delete habits, and check in for today.
+Install on VM:
 
-## Test
+- `git`
+- `python3`
+- `systemd` (already available on Ubuntu VMs)
+- Public HTTPS tunnel/domain for Telegram Mini App URL
 
-```powershell
-$env:UV_CACHE_DIR='.uv-cache'; $env:UV_PYTHON_INSTALL_DIR='.uv-python'; uv run --python 3.12 python -m unittest discover -s tests -v
-```
+Step-by-step deployment:
 
-## Run On Ubuntu VM (Auto-Start, No SSH Session Needed)
-
-This setup runs the backend as a `systemd` service, so it keeps working after you log out and after VM reboot.
-
-1. Install dependencies:
-
-```bash
-sudo apt update
-sudo apt install -y git python3
-```
-
-2. Clone repo and switch to your task branch:
+1. Clone repository:
 
 ```bash
 git clone https://github.com/Alexapng/se-toolkit-hackathon.git
@@ -72,75 +65,42 @@ cd se-toolkit-hackathon
 git checkout feature/task3-habit-bot-v1
 ```
 
-3. Install and start the service:
+2. Install/start backend service:
 
 ```bash
 chmod +x deploy/install_systemd.sh
 ./deploy/install_systemd.sh --service-name habitbot --user "$USER" --host 0.0.0.0 --port 8000
 ```
 
-4. Verify service health:
+3. Verify backend:
 
 ```bash
 curl http://127.0.0.1:8000/health
-sudo systemctl status habitbot
+sudo systemctl status habitbot --no-pager
 ```
 
-5. Allow external access:
+4. Start Telegram bot service:
 
 ```bash
-sudo ufw allow 8000/tcp
+chmod +x deploy/install_telegram_bot_systemd.sh
+./deploy/install_telegram_bot_systemd.sh --token "<BOT_TOKEN>" --web-app-url "https://<YOUR_PUBLIC_HTTPS_URL>"
 ```
 
-6. Open the web app from your laptop:
+5. Verify Telegram bot:
 
-`http://<YOUR_VM_PUBLIC_IP>:8000/`
+```bash
+sudo systemctl status habitbot-telegram --no-pager
+sudo journalctl -u habitbot-telegram -f
+```
+
+6. Set Mini App URL in `@BotFather` to the same HTTPS URL used in `--web-app-url`.
 
 Useful service commands:
 
 ```bash
 sudo systemctl restart habitbot
-sudo systemctl stop habitbot
-sudo systemctl start habitbot
+sudo systemctl restart habitbot-telegram
 sudo journalctl -u habitbot -f
-```
-
-## Telegram Mini App Setup
-
-Requirements:
-
-- Telegram bot token from `@BotFather`.
-- Public HTTPS URL for your web app (for example `https://your-domain.com`).
-- In `@BotFather`, set Mini App URL to the same HTTPS URL.
-
-Run Telegram bot service on VM:
-
-```bash
-cd ~/se-toolkit-hackathon
-git fetch origin
-git checkout feature/task3-habit-bot-v1
-git pull
-chmod +x deploy/install_telegram_bot_systemd.sh
-./deploy/install_telegram_bot_systemd.sh --token "<BOT_TOKEN>" --web-app-url "https://<YOUR_PUBLIC_HTTPS_URL>"
-```
-
-Check bot service:
-
-```bash
-sudo systemctl status habitbot-telegram
 sudo journalctl -u habitbot-telegram -f
 ```
 
-Mini App cache behavior:
-
-- Frontend assets (`app.js`, `styles.css`) are automatically versioned by the backend.
-- After deploying frontend changes, restart `habitbot` and reopen the Mini App in Telegram.
-- You do not need to manually add `?v=...` to `TELEGRAM_WEB_APP_URL`.
-
-Supported Telegram commands:
-
-- `/start` - link Telegram account and open Mini App button
-- `/open` - send Mini App button again
-- `/streak` - current streak summary
-- `/notify_on [hour]` - enable daily reminders (hour 0..23, default `20`)
-- `/notify_off` - disable daily reminders

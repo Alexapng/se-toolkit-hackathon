@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720">
+  <rect width="1200" height="720" fill="#f2f7f5"/>
+  <rect x="60" y="60" width="1080" height="600" rx="24" fill="#ffffff" stroke="#cfe3db" stroke-width="4"/>
+  <text x="100" y="130" font-family="Arial, sans-serif" font-size="44" fill="#1e2b24">Mini App Dashboard Placeholder</text>
+  <text x="100" y="190" font-family="Arial, sans-serif" font-size="28" fill="#415750">Replace with your real screenshot from Telegram Mini App</text>
+  <rect x="100" y="240" width="480" height="90" rx="12" fill="#e8f4ef"/>
+  <text x="130" y="295" font-family="Arial, sans-serif" font-size="30" fill="#1e2b24">Streak: 3 days</text>
+  <rect x="100" y="360" width="1000" height="90" rx="12" fill="#f8fbfa" stroke="#d6e8e0"/>
+  <text x="130" y="415" font-family="Arial, sans-serif" font-size="30" fill="#1e2b24">Drink water - done</text>
+  <rect x="100" y="470" width="1000" height="90" rx="12" fill="#f8fbfa" stroke="#d6e8e0"/>
+  <text x="130" y="525" font-family="Arial, sans-serif" font-size="30" fill="#1e2b24">Walk 10 minutes - pending</text>
+</svg>
+

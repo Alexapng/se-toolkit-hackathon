@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720">
+  <rect width="1200" height="720" fill="#eef3ff"/>
+  <rect x="220" y="40" width="760" height="640" rx="26" fill="#ffffff" stroke="#d6defa" stroke-width="4"/>
+  <text x="270" y="105" font-family="Arial, sans-serif" font-size="36" fill="#24335f">Telegram Bot Placeholder</text>
+  <rect x="270" y="150" width="660" height="120" rx="14" fill="#f3f7ff"/>
+  <text x="300" y="200" font-family="Arial, sans-serif" font-size="24" fill="#24335f">Daily reminder for @username:</text>
+  <text x="300" y="235" font-family="Arial, sans-serif" font-size="24" fill="#24335f">Today's progress: 1/2, pending: Walk</text>
+  <rect x="430" y="320" width="360" height="76" rx="12" fill="#dff1ea"/>
+  <text x="495" y="367" font-family="Arial, sans-serif" font-size="28" fill="#1f5a47">Open Habit Mini App</text>
+  <text x="270" y="460" font-family="Arial, sans-serif" font-size="24" fill="#4b5d8c">Replace with real screenshot from bot chat.</text>
+</svg>
+
