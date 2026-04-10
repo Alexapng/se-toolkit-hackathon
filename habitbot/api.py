@@ -2,14 +2,33 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from .service import HabitService
 
 
 def _build_handler(service: HabitService) -> type[BaseHTTPRequestHandler]:
+    web_root = Path(__file__).resolve().parent / "web"
+    asset_files = ("index.html", "styles.css", "app.js")
+
+    def _asset_version_token() -> str:
+        # Optional fixed version for deployments; otherwise derive from static file mtimes.
+        forced = os.getenv("HABITBOT_ASSET_VERSION", "").strip()
+        if forced:
+            return forced
+
+        newest_mtime_ns = 0
+        for file_name in asset_files:
+            file_path = web_root / file_name
+            if not file_path.exists():
+                continue
+            newest_mtime_ns = max(newest_mtime_ns, file_path.stat().st_mtime_ns)
+        return str(newest_mtime_ns or 0)
+
     class HabitApiHandler(BaseHTTPRequestHandler):
         _service = service
         server_version = "HabitBot/0.1"
@@ -19,8 +38,26 @@ def _build_handler(service: HabitService) -> type[BaseHTTPRequestHandler]:
             query = parse_qs(parsed.query)
 
             try:
-                if parsed.path == "/health":
+                if parsed.path in {"/", "/index.html"}:
+                    self._send_index_file(web_root / "index.html")
+                elif parsed.path == "/styles.css":
+                    self._send_static_file(
+                        web_root / "styles.css",
+                        "text/css; charset=utf-8",
+                        cache_control="public, max-age=31536000, immutable",
+                    )
+                elif parsed.path == "/app.js":
+                    self._send_static_file(
+                        web_root / "app.js",
+                        "application/javascript; charset=utf-8",
+                        cache_control="public, max-age=31536000, immutable",
+                    )
+                elif parsed.path == "/health":
                     self._send_json(HTTPStatus.OK, {"status": "ok"})
+                elif parsed.path == "/users/lookup":
+                    name = self._required_str_param(query, "name")
+                    user = self._service.get_user_by_name(name)
+                    self._send_json(HTTPStatus.OK, user)
                 elif parsed.path == "/users":
                     users = self._service.list_users()
                     self._send_json(HTTPStatus.OK, {"users": users})
@@ -61,6 +98,21 @@ def _build_handler(service: HabitService) -> type[BaseHTTPRequestHandler]:
             except Exception as exc:  # noqa: BLE001
                 self._handle_exception(exc)
 
+        def do_DELETE(self) -> None:  # noqa: N802
+            parsed = urlparse(self.path)
+            query = parse_qs(parsed.query)
+
+            try:
+                if parsed.path == "/habits":
+                    user_id = self._required_int_param(query, "user_id")
+                    habit_id = self._required_int_param(query, "habit_id")
+                    self._service.delete_habit(user_id=user_id, habit_id=habit_id)
+                    self._send_json(HTTPStatus.OK, {"status": "deleted"})
+                else:
+                    self._send_json(HTTPStatus.NOT_FOUND, {"error": "route not found"})
+            except Exception as exc:  # noqa: BLE001
+                self._handle_exception(exc)
+
         def _handle_exception(self, exc: Exception) -> None:
             if isinstance(exc, KeyError):
                 field_name = str(exc).strip("'")
@@ -79,6 +131,41 @@ def _build_handler(service: HabitService) -> type[BaseHTTPRequestHandler]:
                 return
 
             self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "internal server error"})
+
+        def _send_index_file(self, file_path: Path) -> None:
+            if not file_path.exists() or not file_path.is_file():
+                self._send_json(HTTPStatus.NOT_FOUND, {"error": "static file not found"})
+                return
+
+            asset_suffix = f"?v={_asset_version_token()}"
+            template = file_path.read_text(encoding="utf-8")
+            body = template.replace("{{ASSET_SUFFIX}}", asset_suffix).encode("utf-8")
+
+            self.send_response(HTTPStatus.OK.value)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _send_static_file(
+            self,
+            file_path: Path,
+            content_type: str,
+            cache_control: str | None = None,
+        ) -> None:
+            if not file_path.exists() or not file_path.is_file():
+                self._send_json(HTTPStatus.NOT_FOUND, {"error": "static file not found"})
+                return
+
+            body = file_path.read_bytes()
+            self.send_response(HTTPStatus.OK.value)
+            self.send_header("Content-Type", content_type)
+            if cache_control:
+                self.send_header("Cache-Control", cache_control)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
 
         def _read_json_body(self) -> dict[str, object]:
             content_length = int(self.headers.get("Content-Length", "0"))
@@ -142,6 +229,16 @@ def _build_handler(service: HabitService) -> type[BaseHTTPRequestHandler]:
                 raise ValueError(f"query parameter '{key}' must be an integer") from exc
 
         @staticmethod
+        def _required_str_param(query: dict[str, list[str]], key: str) -> str:
+            values = query.get(key)
+            if not values:
+                raise ValueError(f"missing query parameter: {key}")
+            value = values[0].strip()
+            if not value:
+                raise ValueError(f"query parameter '{key}' cannot be empty")
+            return value
+
+        @staticmethod
         def _optional_str_param(query: dict[str, list[str]], key: str) -> str | None:
             values = query.get(key)
             if not values:
@@ -156,7 +253,7 @@ def run_server(host: str, port: int, db_path: str) -> None:
     handler_cls = _build_handler(service)
 
     with ThreadingHTTPServer((host, port), handler_cls) as server:
-        print(f"Habit API is running at http://{host}:{port} (db: {db_path})")
+        print(f"Habit web app + API is running at http://{host}:{port} (db: {db_path})")
         print("Press Ctrl+C to stop.")
         try:
             server.serve_forever()
@@ -165,7 +262,7 @@ def run_server(host: str, port: int, db_path: str) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run the minimal habit bot backend API server.")
+    parser = argparse.ArgumentParser(description="Run the minimal habit bot web app + backend API server.")
     parser.add_argument("--host", default="127.0.0.1", help="Host for API server (default: 127.0.0.1).")
     parser.add_argument("--port", type=int, default=8000, help="Port for API server (default: 8000).")
     parser.add_argument(
@@ -179,4 +276,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

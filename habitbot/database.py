@@ -41,8 +41,23 @@ def init_db(db_path: str) -> None:
                 FOREIGN KEY(habit_id) REFERENCES habits(id) ON DELETE CASCADE
             );
 
+            CREATE TABLE IF NOT EXISTS telegram_profiles (
+                telegram_user_id INTEGER PRIMARY KEY,
+                chat_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                username TEXT,
+                notifications_enabled INTEGER NOT NULL DEFAULT 1,
+                notification_hour INTEGER NOT NULL DEFAULT 20,
+                last_notification_date TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+
             CREATE INDEX IF NOT EXISTS idx_habits_user_id ON habits(user_id);
             CREATE INDEX IF NOT EXISTS idx_checkins_habit_date ON checkins(habit_id, checkin_date);
+            CREATE INDEX IF NOT EXISTS idx_tg_profiles_user_id ON telegram_profiles(user_id);
+            CREATE INDEX IF NOT EXISTS idx_tg_profiles_notify_hour ON telegram_profiles(notification_hour);
             """
         )
         conn.commit()

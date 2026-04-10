@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Minimal Habit Bot</title>
+  <link rel="stylesheet" href="/styles.css{{ASSET_SUFFIX}}">
+</head>
+<body>
+  <main class="layout">
+    <header class="hero">
+      <p class="eyebrow">Daily Consistency</p>
+      <h1>Minimal Habit Bot</h1>
+      <p class="subtitle">Track small habits with one simple check-in per day.</p>
+    </header>
+
+    <section class="panel">
+      <h2>Telegram Profile</h2>
+      <p id="currentUserText" class="current-user">Waiting for Telegram profile...</p>
+    </section>
+
+    <section class="panel">
+      <h2>Daily Check-In</h2>
+      <div class="row">
+        <label for="statusDateInput">Date</label>
+        <input id="statusDateInput" type="date">
+        <button id="refreshStatusBtn" type="button" class="btn ghost">Refresh</button>
+      </div>
+      <div class="stats" id="statsBox">
+        <div class="stat">
+          <span class="stat-label">Completed</span>
+          <span class="stat-value" id="completedCount">0</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Total habits</span>
+          <span class="stat-value" id="totalCount">0</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Streak</span>
+          <span class="stat-value" id="streakCount">0 days</span>
+        </div>
+      </div>
+      <p id="streakMessage" class="streak-message">Keep going. Complete all habits today to build your streak.</p>
+      <div id="habitsList" class="habits"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Add Habit</h2>
+      <div class="row">
+        <label for="newHabitInput">Habit name</label>
+        <input id="newHabitInput" type="text" placeholder="Drink water">
+        <button id="addHabitBtn" type="button" class="btn">Add</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="/app.js{{ASSET_SUFFIX}}" defer></script>
+</body>
+</html>
