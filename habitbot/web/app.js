@@ -159,7 +159,11 @@ function renderHabits() {
     checkButton.textContent = isDone ? "Checked in" : "Check in";
     checkButton.disabled = isDone || state.isBusy;
     checkButton.addEventListener("click", async () => {
-      await checkInHabit(habit.id);
+      try {
+        await checkInHabit(habit.id);
+      } catch (err) {
+        alert(err.message);
+      }
     });
 
     const deleteButton = document.createElement("button");
@@ -172,7 +176,11 @@ function renderHabits() {
       if (!confirmed) {
         return;
       }
-      await deleteHabit(habit.id);
+      try {
+        await deleteHabit(habit.id);
+      } catch (err) {
+        alert(err.message);
+      }
     });
 
     actions.appendChild(checkButton);
@@ -277,28 +285,34 @@ async function deleteHabit(habitId) {
     return;
   }
 
+  let deleted = false;
   setBusy(true);
   try {
     const userId = encodeURIComponent(String(state.activeUserId));
     const encodedHabitId = encodeURIComponent(String(habitId));
     await request(`/habits?user_id=${userId}&habit_id=${encodedHabitId}`, {
       method: "DELETE",
-    });
+    }, 8000);
+    deleted = true;
+
     // Keep UI responsive even if a follow-up refresh request fails.
     state.habits = state.habits.filter((habit) => habit.id !== habitId);
     if (state.status?.habits) {
       state.status.habits = state.status.habits.filter((habit) => habit.habit_id !== habitId);
     }
     renderHabits();
-
-    try {
-      await loadDashboard();
-    } catch (refreshErr) {
-      console.warn("Post-delete refresh failed:", refreshErr);
-    }
   } finally {
     setBusy(false);
   }
+
+  if (!deleted) {
+    return;
+  }
+
+  // Refresh in background so buttons/inputs are not locked by network delay.
+  loadDashboard().catch((refreshErr) => {
+    console.warn("Post-delete refresh failed:", refreshErr);
+  });
 }
 
 async function checkInHabit(habitId) {
