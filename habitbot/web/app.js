@@ -8,6 +8,7 @@ const state = {
 };
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 8000;
+let backgroundRefreshPromise = null;
 
 const refs = {
   currentUserText: document.getElementById("currentUserText"),
@@ -84,6 +85,57 @@ function setBusy(isBusy) {
   refs.newHabitInput.disabled = !hasUser;
   refs.addHabitBtn.disabled = isBusy || !hasUser;
   refs.refreshStatusBtn.disabled = isBusy || !hasUser;
+}
+
+function localMessageForProgress(totalHabits, completedHabits, currentStreakDays) {
+  if (totalHabits === 0) {
+    return "Add your first habit to start a streak.";
+  }
+  if (completedHabits >= totalHabits) {
+    if (currentStreakDays === 1) {
+      return "Yay! Great job! You started your streak today.";
+    }
+    if (currentStreakDays > 1) {
+      return `Yay! Great job! You're on a ${currentStreakDays}-day streak.`;
+    }
+    return "Yay! Great job! All habits are done today.";
+  }
+  return "Keep going. Complete all habits today to build your streak.";
+}
+
+function updateLocalStatusSummary() {
+  if (!state.status || !Array.isArray(state.status.habits)) {
+    return;
+  }
+
+  const completedHabits = state.status.habits.filter((item) => Boolean(item.completed)).length;
+  const totalHabits = state.status.habits.length;
+  const currentStreakDays = Number(state.status.streak?.current_streak_days || 0);
+
+  state.status = {
+    ...state.status,
+    summary: {
+      ...(state.status.summary || {}),
+      completed_habits: completedHabits,
+      total_habits: totalHabits,
+      all_done_today: totalHabits > 0 && completedHabits === totalHabits,
+    },
+    message: localMessageForProgress(totalHabits, completedHabits, currentStreakDays),
+  };
+}
+
+function refreshDashboardInBackground() {
+  if (backgroundRefreshPromise) {
+    return;
+  }
+
+  backgroundRefreshPromise = loadDashboard()
+    .catch((refreshErr) => {
+      console.warn("Background dashboard refresh failed:", refreshErr);
+    })
+    .finally(() => {
+      backgroundRefreshPromise = null;
+    });
 }
 
 function updateCurrentUserText() {
@@ -266,17 +318,38 @@ async function addHabit() {
     return;
   }
 
+  let created = false;
   setBusy(true);
   try {
-    await request("/habits", {
+    const habit = await request("/habits", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ user_id: state.activeUserId, name }),
-    });
+    }, 6000);
+    created = true;
+
+    if (habit && typeof habit.id !== "undefined") {
+      state.habits = [...state.habits, habit];
+      if (state.status?.habits) {
+        state.status.habits = [
+          ...state.status.habits,
+          {
+            habit_id: habit.id,
+            habit_name: habit.name,
+            completed: false,
+          },
+        ];
+        updateLocalStatusSummary();
+      }
+      renderHabits();
+    }
     refs.newHabitInput.value = "";
-    await loadDashboard();
   } finally {
     setBusy(false);
+  }
+
+  if (created) {
+    refreshDashboardInBackground();
   }
 }
 
@@ -299,6 +372,7 @@ async function deleteHabit(habitId) {
     state.habits = state.habits.filter((habit) => habit.id !== habitId);
     if (state.status?.habits) {
       state.status.habits = state.status.habits.filter((habit) => habit.habit_id !== habitId);
+      updateLocalStatusSummary();
     }
   } finally {
     setBusy(false);
@@ -312,23 +386,34 @@ async function deleteHabit(habitId) {
   renderHabits();
 
   // Refresh in background so buttons/inputs are not locked by network delay.
-  loadDashboard().catch((refreshErr) => {
-    console.warn("Post-delete refresh failed:", refreshErr);
-  });
+  refreshDashboardInBackground();
 }
 
 async function checkInHabit(habitId) {
   const date = currentDateValue();
+  let checkedIn = false;
   setBusy(true);
   try {
     await request("/checkins", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ habit_id: habitId, date }),
-    });
-    await loadDashboard();
+    }, 6000);
+    checkedIn = true;
+
+    if (state.status?.habits) {
+      state.status.habits = state.status.habits.map((habit) =>
+        habit.habit_id === habitId ? { ...habit, completed: true } : habit,
+      );
+      updateLocalStatusSummary();
+    }
+    renderHabits();
   } finally {
     setBusy(false);
+  }
+
+  if (checkedIn) {
+    refreshDashboardInBackground();
   }
 }
 
