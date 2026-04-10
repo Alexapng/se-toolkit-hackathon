@@ -164,17 +164,23 @@ class TelegramBot:
     def _handle_start(self, chat_id: int, telegram_user: dict[str, Any]) -> None:
         telegram_user_id = int(telegram_user.get("id"))
         username = (telegram_user.get("username") or "").strip() or None
+        if username is None:
+            self._send_message(
+                chat_id,
+                "Your Telegram account has no @username yet. "
+                "Set it in Telegram settings and send /start again.",
+            )
+            return
 
-        profile_name = self._profile_name_from_telegram_user(telegram_user)
         linked = self._service.register_telegram_profile(
             telegram_user_id=telegram_user_id,
             chat_id=chat_id,
-            profile_name=profile_name,
+            profile_name=username,
             username=username,
         )
 
         welcome_lines = [
-            f"Hi, {profile_name}!",
+            f"Hi, @{username}!",
             f"Your profile is linked as: {linked['user_name']}",
             "Use /streak to check progress and /notify_on or /notify_off for reminders.",
         ]
@@ -237,7 +243,10 @@ class TelegramBot:
         )
         self._send_message(
             chat_id,
-            f"Daily reminders enabled at {profile['notification_hour']:02d}:00.",
+            (
+                f"Daily reminders enabled at {profile['notification_hour']:02d}:00 "
+                f"({self._timezone}). I'll remind you to check pending habits."
+            ),
             reply_markup=self._open_app_markup(),
         )
 
@@ -259,16 +268,9 @@ class TelegramBot:
                 targets = self._service.list_telegram_notification_targets(current_date=today, hour=hour)
                 for target in targets:
                     status = self._service.daily_status(int(target["user_id"]), today)
-                    streak_days = int(status["streak"]["current_streak_days"])
-                    completed = int(status["summary"]["completed_habits"])
-                    total = int(status["summary"]["total_habits"])
-                    text = "\n".join(
-                        [
-                            f"Daily reminder for {target['user_name']}:",
-                            f"Today's progress: {completed}/{total}",
-                            f"Current streak: {streak_days} day{'s' if streak_days != 1 else ''}",
-                            str(status["message"]),
-                        ]
+                    text = self._build_reminder_text(
+                        user_name=str(target["user_name"]),
+                        status=status,
                     )
                     self._send_message(
                         int(target["chat_id"]),
@@ -285,19 +287,49 @@ class TelegramBot:
             self._stop_event.wait(60)
 
     @staticmethod
-    def _profile_name_from_telegram_user(telegram_user: dict[str, Any]) -> str:
-        username = (telegram_user.get("username") or "").strip()
-        if username:
-            return username
+    def _build_reminder_text(user_name: str, status: dict[str, Any]) -> str:
+        summary = status.get("summary") or {}
+        streak = status.get("streak") or {}
+        completed = int(summary.get("completed_habits") or 0)
+        total = int(summary.get("total_habits") or 0)
+        streak_days = int(streak.get("current_streak_days") or 0)
 
-        first_name = (telegram_user.get("first_name") or "").strip()
-        last_name = (telegram_user.get("last_name") or "").strip()
-        full_name = f"{first_name} {last_name}".strip()
-        if full_name:
-            return full_name
+        pending_habits: list[str] = []
+        for item in status.get("habits") or []:
+            if bool(item.get("completed")):
+                continue
+            name = str(item.get("habit_name") or "").strip()
+            if name:
+                pending_habits.append(name)
 
-        user_id = int(telegram_user.get("id"))
-        return f"telegram_{user_id}"
+        lines: list[str]
+        if total == 0:
+            lines = [
+                f"Hi, {user_name}!",
+                "You do not have habits yet.",
+                "Open the Mini App and add your first habit today.",
+            ]
+        elif completed >= total:
+            lines = [
+                f"Great job, {user_name}!",
+                f"All habits are done today: {completed}/{total}.",
+                f"Current streak: {streak_days} day{'s' if streak_days != 1 else ''}.",
+                "Come back tomorrow to keep your streak alive.",
+            ]
+        else:
+            pending = ", ".join(pending_habits) if pending_habits else "some habits"
+            lines = [
+                f"Habit check-in reminder for {user_name}:",
+                f"Today's progress: {completed}/{total}.",
+                f"Still pending: {pending}.",
+                f"Current streak: {streak_days} day{'s' if streak_days != 1 else ''}.",
+                "Open the Mini App and finish today's check-ins.",
+            ]
+
+        status_message = str(status.get("message") or "").strip()
+        if status_message:
+            lines.append(status_message)
+        return "\n".join(lines)
 
 
 def main() -> None:
@@ -344,4 +376,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

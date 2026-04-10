@@ -144,6 +144,15 @@ select:focus {
   background: #dbece3;
 }
 
+.btn.danger {
+  background: #c8454f;
+  color: #fff;
+}
+
+.btn.danger:hover {
+  background: #a8363f;
+}
+
 .stats {
   margin: 0.8rem 0;
   display: grid;
@@ -189,6 +198,12 @@ select:focus {
 
 .habit-title {
   font-weight: 600;
+}
+
+.habit-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
 }
 
 .tag {
@@ -243,5 +258,9 @@ select:focus {
   .habit-row {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .habit-actions {
+    width: 100%;
   }
 }

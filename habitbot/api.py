@@ -77,6 +77,21 @@ def _build_handler(service: HabitService) -> type[BaseHTTPRequestHandler]:
             except Exception as exc:  # noqa: BLE001
                 self._handle_exception(exc)
 
+        def do_DELETE(self) -> None:  # noqa: N802
+            parsed = urlparse(self.path)
+            query = parse_qs(parsed.query)
+
+            try:
+                if parsed.path == "/habits":
+                    user_id = self._required_int_param(query, "user_id")
+                    habit_id = self._required_int_param(query, "habit_id")
+                    self._service.delete_habit(user_id=user_id, habit_id=habit_id)
+                    self._send_json(HTTPStatus.OK, {"status": "deleted"})
+                else:
+                    self._send_json(HTTPStatus.NOT_FOUND, {"error": "route not found"})
+            except Exception as exc:  # noqa: BLE001
+                self._handle_exception(exc)
+
         def _handle_exception(self, exc: Exception) -> None:
             if isinstance(exc, KeyError):
                 field_name = str(exc).strip("'")

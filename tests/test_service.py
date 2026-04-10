@@ -57,6 +57,24 @@ class HabitServiceTests(unittest.TestCase):
 
         self.assertEqual(first["checkin_id"], second["checkin_id"])
 
+    def test_delete_habit(self) -> None:
+        user = self.service.create_user("Alex")
+        habit = self.service.add_habit(user["id"], "Meditate")
+        self.service.delete_habit(user_id=user["id"], habit_id=habit["id"])
+        habits = self.service.list_habits(user["id"])
+        self.assertEqual(habits, [])
+
+    def test_delete_habit_rejects_foreign_or_missing_habit(self) -> None:
+        user_a = self.service.create_user("Alex")
+        user_b = self.service.create_user("Maria")
+        habit_a = self.service.add_habit(user_a["id"], "Run")
+
+        with self.assertRaises(LookupError):
+            self.service.delete_habit(user_id=user_b["id"], habit_id=habit_a["id"])
+
+        with self.assertRaises(LookupError):
+            self.service.delete_habit(user_id=user_a["id"], habit_id=99999)
+
     def test_invalid_or_missing_entities_raise_clear_errors(self) -> None:
         with self.assertRaises(LookupError):
             self.service.list_habits(999)

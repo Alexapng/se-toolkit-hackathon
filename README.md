@@ -22,10 +22,11 @@ Track daily completion of small habits with a lightweight backend API, SQLite da
 - Added motivational message in the UI, including:
   - `Yay! Great job! You started your streak today.`
   - `Yay! Great job! You're on a N-day streak.`
+- Added habit deletion from the web app.
 - Added Telegram bot integration:
-  - `/start` links Telegram nickname to the habit profile name;
+  - `/start` links Telegram `@username` to the habit profile name;
   - bot sends Mini App button to open the web app in Telegram;
-  - daily Telegram streak reminders (`/notify_on`, `/notify_off`).
+  - daily Telegram reminders include pending habits and streak info (`/notify_on`, `/notify_off`).
 
 ## Run Locally
 
@@ -35,14 +36,16 @@ Track daily completion of small habits with a lightweight backend API, SQLite da
 $env:UV_CACHE_DIR='.uv-cache'; $env:UV_PYTHON_INSTALL_DIR='.uv-python'; uv run --python 3.12 python -m habitbot.api --host 127.0.0.1 --port 8000
 ```
 
-2. Open the web app in browser:
+2. Check server health:
 
-`http://127.0.0.1:8000/`
+`http://127.0.0.1:8000/health`
 
-3. In the web app:
+3. Use it from Telegram Mini App:
 
-- Enter your name and click `Use` (this creates your account if needed).
-- Add habits and check in for today.
+- Send `/start` to your bot in Telegram.
+- Tap `Open Habit Mini App`.
+- The app automatically uses your Telegram `@username`.
+- Add habits, delete habits, and check in for today.
 
 ## Test
 

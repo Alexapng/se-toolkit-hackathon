@@ -285,6 +285,19 @@ class HabitService:
         except sqlite3.IntegrityError as exc:
             raise ValueError("habit already exists for this user") from exc
 
+    def delete_habit(self, user_id: int, habit_id: int) -> None:
+        with get_connection(self.db_path) as conn:
+            self._ensure_user_exists(conn, user_id)
+            row = conn.execute(
+                "SELECT id FROM habits WHERE id = ? AND user_id = ?",
+                (habit_id, user_id),
+            ).fetchone()
+            if row is None:
+                raise LookupError("habit not found")
+
+            conn.execute("DELETE FROM habits WHERE id = ?", (habit_id,))
+            conn.commit()
+
     def list_habits(self, user_id: int) -> list[Record]:
         with get_connection(self.db_path) as conn:
             self._ensure_user_exists(conn, user_id)

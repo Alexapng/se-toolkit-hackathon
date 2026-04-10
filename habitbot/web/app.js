@@ -1,15 +1,13 @@
-const USER_NAME_KEY = "habitbot_user_name";
-
 const state = {
   activeUserId: null,
   activeUserName: "",
+  telegramUsername: "",
   habits: [],
   status: null,
+  isBusy: false,
 };
 
 const refs = {
-  userNameInput: document.getElementById("userNameInput"),
-  useNameBtn: document.getElementById("useNameBtn"),
   currentUserText: document.getElementById("currentUserText"),
   statusDateInput: document.getElementById("statusDateInput"),
   refreshStatusBtn: document.getElementById("refreshStatusBtn"),
@@ -22,7 +20,7 @@ const refs = {
   addHabitBtn: document.getElementById("addHabitBtn"),
 };
 
-function readTelegramMiniAppProfileName() {
+function readTelegramUsername() {
   const telegram = window.Telegram?.WebApp;
   if (!telegram) {
     return null;
@@ -35,33 +33,8 @@ function readTelegramMiniAppProfileName() {
     // Ignore optional Telegram WebApp API errors.
   }
 
-  const user = telegram.initDataUnsafe?.user;
-  if (!user) {
-    return null;
-  }
-
-  const username = String(user.username || "").trim();
-  if (username) {
-    return username;
-  }
-
-  const firstName = String(user.first_name || "").trim();
-  const lastName = String(user.last_name || "").trim();
-  const fullName = `${firstName} ${lastName}`.trim();
-  if (fullName) {
-    return fullName;
-  }
-
-  if (user.id) {
-    return `telegram_${user.id}`;
-  }
-  return null;
-}
-
-function readNameFromUrl() {
-  const params = new URLSearchParams(window.location.search);
-  const byQuery = (params.get("tg_name") || "").trim();
-  return byQuery || null;
+  const username = String(telegram.initDataUnsafe?.user?.username || "").trim();
+  return username || null;
 }
 
 function currentDateValue() {
@@ -76,7 +49,7 @@ async function request(path, options = {}) {
   let payload = {};
   try {
     payload = await response.json();
-  } catch (err) {
+  } catch (_err) {
     payload = {};
   }
 
@@ -87,18 +60,22 @@ async function request(path, options = {}) {
   return payload;
 }
 
-function updateCurrentUserText() {
-  if (!state.activeUserId) {
-    refs.currentUserText.textContent = "No user selected yet.";
-    return;
-  }
-  refs.currentUserText.textContent = `Using: ${state.activeUserName}`;
+function setBusy(isBusy) {
+  state.isBusy = isBusy;
+  const hasUser = Boolean(state.activeUserId);
+  refs.newHabitInput.disabled = !hasUser;
+  refs.addHabitBtn.disabled = isBusy || !hasUser;
+  refs.refreshStatusBtn.disabled = isBusy || !hasUser;
 }
 
-function setBusy(isBusy) {
-  refs.useNameBtn.disabled = isBusy;
-  refs.addHabitBtn.disabled = isBusy;
-  refs.refreshStatusBtn.disabled = isBusy;
+function updateCurrentUserText() {
+  if (!state.activeUserId) {
+    refs.currentUserText.textContent =
+      "Open this page from Telegram Mini App. Telegram @username is required.";
+    return;
+  }
+
+  refs.currentUserText.textContent = `Using Telegram @${state.telegramUsername}`;
 }
 
 function renderHabits() {
@@ -111,6 +88,7 @@ function renderHabits() {
     (count, habit) => count + (statusByHabitId.get(habit.id) ? 1 : 0),
     0,
   );
+
   const completed = state.status?.summary?.completed_habits ?? fallbackCompleted;
   const total = state.status?.summary?.total_habits ?? habits.length;
   const streakDays = state.status?.streak?.current_streak_days ?? 0;
@@ -121,6 +99,13 @@ function renderHabits() {
   refs.totalCount.textContent = String(total);
   refs.streakCount.textContent = `${streakDays} day${streakDays === 1 ? "" : "s"}`;
   refs.streakMessage.textContent = streakMessage;
+
+  if (!state.activeUserId) {
+    const empty = document.createElement("p");
+    empty.textContent = "Telegram profile is not linked yet.";
+    refs.habitsList.appendChild(empty);
+    return;
+  }
 
   if (habits.length === 0) {
     const empty = document.createElement("p");
@@ -147,17 +132,36 @@ function renderHabits() {
     left.appendChild(title);
     left.appendChild(tag);
 
-    const button = document.createElement("button");
-    button.className = "btn";
-    button.type = "button";
-    button.textContent = isDone ? "Checked in" : "Check in";
-    button.disabled = isDone;
-    button.addEventListener("click", async () => {
+    const actions = document.createElement("div");
+    actions.className = "habit-actions";
+
+    const checkButton = document.createElement("button");
+    checkButton.className = "btn";
+    checkButton.type = "button";
+    checkButton.textContent = isDone ? "Checked in" : "Check in";
+    checkButton.disabled = isDone || state.isBusy;
+    checkButton.addEventListener("click", async () => {
       await checkInHabit(habit.id);
     });
 
+    const deleteButton = document.createElement("button");
+    deleteButton.className = "btn danger";
+    deleteButton.type = "button";
+    deleteButton.textContent = "Delete";
+    deleteButton.disabled = state.isBusy;
+    deleteButton.addEventListener("click", async () => {
+      const confirmed = window.confirm(`Delete habit "${habit.name}"?`);
+      if (!confirmed) {
+        return;
+      }
+      await deleteHabit(habit.id);
+    });
+
+    actions.appendChild(checkButton);
+    actions.appendChild(deleteButton);
+
     row.appendChild(left);
-    row.appendChild(button);
+    row.appendChild(actions);
     refs.habitsList.appendChild(row);
   }
 }
@@ -179,21 +183,28 @@ async function resolveOrCreateUser(name) {
   });
 }
 
-async function applyUserName() {
-  const name = refs.userNameInput.value.trim();
-  if (!name) {
-    alert("Enter your name first.");
+async function bootstrapTelegramUser() {
+  const telegramUsername = readTelegramUsername();
+  if (!telegramUsername) {
+    state.activeUserId = null;
+    state.activeUserName = "";
+    state.telegramUsername = "";
+    state.habits = [];
+    state.status = null;
+    setBusy(false);
+    updateCurrentUserText();
+    renderHabits();
     return;
   }
 
   setBusy(true);
   try {
-    const user = await resolveOrCreateUser(name);
+    const user = await resolveOrCreateUser(telegramUsername);
     state.activeUserId = user.id;
     state.activeUserName = user.name;
-    localStorage.setItem(USER_NAME_KEY, user.name);
-    await loadDashboard();
+    state.telegramUsername = telegramUsername;
     updateCurrentUserText();
+    await loadDashboard();
   } finally {
     setBusy(false);
   }
@@ -219,9 +230,10 @@ async function loadDashboard() {
 
 async function addHabit() {
   if (!state.activeUserId) {
-    alert("Set your name first.");
+    alert("Open this app from Telegram first.");
     return;
   }
+
   const name = refs.newHabitInput.value.trim();
   if (!name) {
     alert("Enter a habit name first.");
@@ -236,6 +248,24 @@ async function addHabit() {
       body: JSON.stringify({ user_id: state.activeUserId, name }),
     });
     refs.newHabitInput.value = "";
+    await loadDashboard();
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function deleteHabit(habitId) {
+  if (!state.activeUserId) {
+    return;
+  }
+
+  setBusy(true);
+  try {
+    const userId = encodeURIComponent(String(state.activeUserId));
+    const encodedHabitId = encodeURIComponent(String(habitId));
+    await request(`/habits?user_id=${userId}&habit_id=${encodedHabitId}`, {
+      method: "DELETE",
+    });
     await loadDashboard();
   } finally {
     setBusy(false);
@@ -258,14 +288,6 @@ async function checkInHabit(habitId) {
 }
 
 function bindEvents() {
-  refs.useNameBtn.addEventListener("click", async () => {
-    try {
-      await applyUserName();
-    } catch (err) {
-      alert(err.message);
-    }
-  });
-
   refs.addHabitBtn.addEventListener("click", async () => {
     try {
       await addHabit();
@@ -282,14 +304,23 @@ function bindEvents() {
     }
   });
 
-  refs.userNameInput.addEventListener("keydown", async (event) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      try {
-        await applyUserName();
-      } catch (err) {
-        alert(err.message);
-      }
+  refs.statusDateInput.addEventListener("change", async () => {
+    try {
+      await loadDashboard();
+    } catch (err) {
+      alert(err.message);
+    }
+  });
+
+  refs.newHabitInput.addEventListener("keydown", async (event) => {
+    if (event.key !== "Enter") {
+      return;
+    }
+    event.preventDefault();
+    try {
+      await addHabit();
+    } catch (err) {
+      alert(err.message);
     }
   });
 }
@@ -297,23 +328,14 @@ function bindEvents() {
 async function start() {
   currentDateValue();
   bindEvents();
+  renderHabits();
   updateCurrentUserText();
 
-  const telegramName = readTelegramMiniAppProfileName();
-  const queryName = readNameFromUrl();
-  const savedName = localStorage.getItem(USER_NAME_KEY);
-  const resolvedName = telegramName || queryName || savedName;
-
-  if (!resolvedName) {
-    renderHabits();
-    return;
-  }
-
-  refs.userNameInput.value = resolvedName;
   try {
-    await applyUserName();
+    await bootstrapTelegramUser();
   } catch (err) {
     alert(err.message);
+    setBusy(false);
   }
 }
 
