@@ -7,7 +7,7 @@ const state = {
   isBusy: false,
 };
 
-const DEFAULT_REQUEST_TIMEOUT_MS = 12000;
+const DEFAULT_REQUEST_TIMEOUT_MS = 8000;
 
 const refs = {
   currentUserText: document.getElementById("currentUserText"),
@@ -300,7 +300,6 @@ async function deleteHabit(habitId) {
     if (state.status?.habits) {
       state.status.habits = state.status.habits.filter((habit) => habit.habit_id !== habitId);
     }
-    renderHabits();
   } finally {
     setBusy(false);
   }
@@ -308,6 +307,9 @@ async function deleteHabit(habitId) {
   if (!deleted) {
     return;
   }
+
+  // Render once after unlock so habit action buttons are not stuck disabled.
+  renderHabits();
 
   // Refresh in background so buttons/inputs are not locked by network delay.
   loadDashboard().catch((refreshErr) => {
